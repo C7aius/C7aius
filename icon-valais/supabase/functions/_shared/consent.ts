@@ -157,3 +157,87 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export function isUuid(v: string | null | undefined): v is string {
   return typeof v === 'string' && UUID_RE.test(v);
 }
+
+const FORM_TEXTS: Record<Lang, { title: string; body: string; button: string }> = {
+  fr: { title: 'Autorisation parentale', body: 'Confirmez-vous autoriser cette inscription au club Icon Valais ?', button: 'Je confirme' },
+  de: { title: 'Zustimmung der Eltern', body: 'Bestätigen Sie die Anmeldung beim Club Icon Valais?', button: 'Ich bestätige' },
+  en: { title: 'Parental consent', body: 'Do you confirm this sign-up to the Icon Valais club?', button: 'I confirm' },
+  ru: { title: 'Согласие родителей', body: 'Подтверждаете ли вы эту регистрацию в клубе Icon Valais?', button: 'Подтверждаю' },
+};
+
+// Page affichée par le GET (lecture seule) : le consentement n'est donné que par
+// le POST du formulaire, pour que les scanners de liens d'e-mail ne le déclenchent pas.
+export function confirmFormHtml(lang: Lang, token: string): string {
+  const t = FORM_TEXTS[lang] ?? FORM_TEXTS.fr;
+  return (
+    `<!doctype html><html lang="${lang}"><head><meta charset="utf-8">` +
+    `<meta name="viewport" content="width=device-width,initial-scale=1"><title>Icon Valais</title></head>` +
+    `<body style="font-family:sans-serif;max-width:480px;margin:48px auto;padding:0 16px;text-align:center">` +
+    `<h1>${t.title}</h1><p>${t.body}</p>` +
+    `<form method="post" action=""><input type="hidden" name="token" value="${escapeHtml(token)}">` +
+    `<button type="submit" style="padding:12px 20px;font-size:16px">${t.button}</button></form>` +
+    `</body></html>`
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Décision de send-parent-consent (pure : aucune I/O)
+// ---------------------------------------------------------------------------
+export const RESEND_COOLDOWN_MS = 60_000;
+export const DAILY_CAP = 5;
+const DAY_MS = 24 * 3600_000;
+
+export type SendDecisionInput = {
+  profile: {
+    age: number;
+    parentProfileId: string | null;
+    parentConsentAt: string | null;
+    parentEmail: string | null;
+    email: string | null;
+  };
+  userEmail: string | null | undefined;
+  requestedEmail: string | undefined; // déjà normalisé (validateSendRequest)
+  previousRequests: Date[]; // created_at des demandes existantes pour ce profil
+  now: Date;
+};
+
+export type SendDecision =
+  | { ok: true; parentEmail: string; saveEmail: boolean }
+  | { ok: false; status: 400 | 409 | 429; error: string };
+
+export function decideSend(i: SendDecisionInput): SendDecision {
+  const p = i.profile;
+  if (p.parentProfileId !== null || p.age >= 16 || p.parentConsentAt !== null) {
+    return { ok: false, status: 409, error: 'consent not required' };
+  }
+  const existing = p.parentEmail ? p.parentEmail.trim().toLowerCase() : null;
+  const hasRequest = i.previousRequests.length > 0;
+
+  let parentEmail: string;
+  if (hasRequest) {
+    // adresse figée dès qu'une demande existe ; renvoi vers la même adresse autorisé
+    if (!existing || (i.requestedEmail !== undefined && i.requestedEmail !== existing)) {
+      return { ok: false, status: 409, error: 'parent_email_locked' };
+    }
+    parentEmail = existing;
+  } else {
+    const chosen = i.requestedEmail ?? existing;
+    if (!chosen) return { ok: false, status: 400, error: 'parent_email required' };
+    parentEmail = chosen;
+  }
+
+  const own = [p.email, i.userEmail].filter(Boolean).map((e) => String(e).trim().toLowerCase());
+  if (own.includes(parentEmail)) {
+    return { ok: false, status: 400, error: 'parent_email must differ from own email' };
+  }
+
+  const nowMs = i.now.getTime();
+  const times = i.previousRequests.map((d) => d.getTime());
+  if (times.some((t) => nowMs - t < RESEND_COOLDOWN_MS)) {
+    return { ok: false, status: 429, error: 'too many requests' };
+  }
+  if (times.filter((t) => nowMs - t < DAY_MS).length >= DAILY_CAP) {
+    return { ok: false, status: 429, error: 'too many requests' };
+  }
+  return { ok: true, parentEmail, saveEmail: !hasRequest && parentEmail !== existing };
+}

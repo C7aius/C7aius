@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(23);
+select plan(31);
 
 create function pg_temp.signup(p_id uuid, p_email text, p_meta jsonb) returns void
 language sql as $$
@@ -128,6 +128,28 @@ select is((select count(*)::int from public.profiles where first_name in ('Per',
 select is((select count(*)::int from public.parent_consents where parent_email = 'x@test.ch'
              and profile_id not in (select id from public.profiles)), 0,
           'demandes supprimées en cascade');
+
+
+-- ---------------------------------------------------------------------------
+-- check_parent_consent : vérification en lecture seule (GET de la page de confirmation)
+-- ---------------------------------------------------------------------------
+select pg_temp.signup('a1000000-0000-0000-0000-000000000008', 'm8@test.ch',
+  '{"first_name":"Mel","last_name":"Huit","age":11,"sports":["jjb"],"parent_email":"e@test.ch"}');
+insert into public.parent_consents (token, profile_id, parent_email) values
+  ('00000000-0000-4000-8000-000000000008', pg_temp.pid('a1000000-0000-0000-0000-000000000008'), 'e@test.ch');
+select is(public.check_parent_consent('00000000-0000-4000-8000-000000000008'), true, 'check : jeton valide → true');
+select is((select parent_consent_at from public.profiles where auth_user_id = 'a1000000-0000-0000-0000-000000000008'),
+          null, 'check ne renseigne pas parent_consent_at');
+select is((select confirmed_at from public.parent_consents where token = '00000000-0000-4000-8000-000000000008'),
+          null, 'check ne consomme pas le jeton');
+select is(public.check_parent_consent('00000000-0000-4000-8000-000000000003'), false, 'check : jeton de 8 jours → false');
+select is(public.check_parent_consent('00000000-0000-4000-8000-0000000000ff'), false, 'check : jeton inconnu → false');
+select is(public.check_parent_consent('00000000-0000-4000-8000-000000000001'), false, 'check : jeton déjà utilisé → false');
+select pg_temp.login('a1000000-0000-0000-0000-000000000003');
+select throws_ok($$select public.check_parent_consent('00000000-0000-4000-8000-000000000008')$$, '42501', null,
+                 'authenticated ne peut pas appeler check_parent_consent');
+reset role;
+select hasnt_function('public', 'has_parent_consent_request', 'plus de helper appelable par les clients');
 
 select * from finish();
 rollback;

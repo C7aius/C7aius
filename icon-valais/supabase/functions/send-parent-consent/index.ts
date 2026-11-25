@@ -2,9 +2,7 @@
 // l'e-mail via Resend. Secrets requis : RESEND_API_KEY, CONSENT_FROM_EMAIL.
 // Optionnel : PUBLIC_FUNCTIONS_URL (base publique des fonctions pour le lien).
 import { authenticate, corsHeaders, json, serviceClient } from '../_shared/http.ts';
-import { buildConfirmLink, buildConsentEmail, normalizeLang, validateSendRequest } from '../_shared/consent.ts';
-
-const RESEND_COOLDOWN_MS = 60_000;
+import { buildConfirmLink, buildConsentEmail, decideSend, normalizeLang, validateSendRequest } from '../_shared/consent.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -40,41 +38,31 @@ Deno.serve(async (req) => {
   if (pErr) return json(500, { error: 'profile lookup failed' });
   if (!profile) return json(404, { error: 'profile not found' });
 
-  if (profile.parent_profile_id !== null || profile.age >= 16 || profile.parent_consent_at !== null) {
-    return json(409, { error: 'consent not required' });
-  }
-
   const { data: previous, error: cErr } = await db
     .from('parent_consents')
     .select('created_at')
     .eq('profile_id', profile.id)
     .order('created_at', { ascending: false })
-    .limit(1);
+    .limit(50);
   if (cErr) return json(500, { error: 'consent lookup failed' });
-  const hasRequest = (previous?.length ?? 0) > 0;
 
-  // L'adresse parent est figée dès qu'une demande existe : un mineur ne peut pas
-  // rediriger l'e-mail vers lui-même. Renvoi vers la même adresse autorisé.
-  const existing: string | null = profile.parent_email ? String(profile.parent_email).trim().toLowerCase() : null;
-  let parentEmail: string;
-  if (hasRequest) {
-    if (!existing) return json(409, { error: 'parent_email_locked' });
-    if (v.parentEmail !== undefined && v.parentEmail !== existing) {
-      return json(409, { error: 'parent_email_locked' });
-    }
-    parentEmail = existing;
-    const last = new Date(previous![0].created_at).getTime();
-    if (Date.now() - last < RESEND_COOLDOWN_MS) return json(429, { error: 'too many requests' });
-  } else {
-    const chosen = v.parentEmail ?? existing;
-    if (!chosen) return json(400, { error: 'parent_email required' });
-    parentEmail = chosen;
-  }
+  const decision = decideSend({
+    profile: {
+      age: profile.age,
+      parentProfileId: profile.parent_profile_id,
+      parentConsentAt: profile.parent_consent_at,
+      parentEmail: profile.parent_email,
+      email: profile.email,
+    },
+    userEmail: user.email,
+    requestedEmail: v.parentEmail,
+    previousRequests: (previous ?? []).map((r) => new Date(r.created_at)),
+    now: new Date(),
+  });
+  if (!decision.ok) return json(decision.status, { error: decision.error });
+  const parentEmail = decision.parentEmail;
 
-  const own = [profile.email, user.email].filter(Boolean).map((e) => String(e).trim().toLowerCase());
-  if (own.includes(parentEmail)) return json(400, { error: 'parent_email must differ from own email' });
-
-  if (!hasRequest && parentEmail !== existing) {
+  if (decision.saveEmail) {
     const { error } = await db.from('profiles').update({ parent_email: parentEmail }).eq('id', profile.id);
     if (error) return json(500, { error: 'could not save parent_email' });
   }
@@ -103,7 +91,8 @@ Deno.serve(async (req) => {
   }
   if (!sent) {
     // pas d'e-mail parti : on retire le jeton pour ne pas figer l'adresse inutilement
-    await db.from('parent_consents').delete().eq('token', row.token);
+    const { error: delErr } = await db.from('parent_consents').delete().eq('token', row.token);
+    if (delErr) console.error('could not remove consent token after delivery failure', delErr.message);
     return json(502, { error: 'email delivery failed' });
   }
   return json(200, { ok: true });
