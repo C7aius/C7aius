@@ -106,6 +106,8 @@ describe('reset password', () => {
     expect(mockUpdateUser).toHaveBeenCalledWith({ password: 'longenough1' });
     expect(mockEndRecovery).toHaveBeenCalled();
     expect(mockSignOut).toHaveBeenCalled();
+    // déconnexion d'abord : AuthGate ne doit jamais voir une session active hors récupération
+    expect(mockSignOut.mock.invocationCallOrder[0]).toBeLessThan(mockEndRecovery.mock.invocationCallOrder[0]);
   });
 
   it('shows an error and stays when updateUser fails', async () => {

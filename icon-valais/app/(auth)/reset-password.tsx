@@ -62,8 +62,10 @@ export default function ResetPassword() {
         setError(e.code === 'same_password' ? 'auth.samePassword' : e.code === 'weak_password' ? 'errors.passwordTooShort' : 'errors.generic');
         return;
       }
-      endRecovery();
+      // déconnexion AVANT la fin de la récupération : sinon AuthGate voit une session active hors
+      // récupération et redirige vers les onglets, en course avec la redirection vers /login?reset=1
       await signOut();
+      endRecovery();
       router.replace({ pathname: '/login', params: { reset: '1' } });
     } catch {
       setError('errors.network');
