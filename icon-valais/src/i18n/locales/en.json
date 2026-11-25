@@ -249,6 +249,25 @@
     "me": "Me",
     "openMaps": "Open in Google Maps",
     "empty": "No classes this week.",
-    "loadError": "Could not load classes."
+    "loadError": "Could not load classes.",
+    "take": "Take this class",
+    "leave": "Withdraw",
+    "assignProf": "Assign a coach",
+    "noProf": "No coach",
+    "cancelCourse": "Cancel class",
+    "scopeOne": "This class only",
+    "scopeFollowing": "This class and the following ones",
+    "confirmCancel": "Confirm cancellation",
+    "cancelPrompt": "Cancel this class? Booked members will be notified.",
+    "participants": "Participants",
+    "noParticipants": "No bookings.",
+    "presentLabel": "Present: {{name}}",
+    "beltLabel": "Belt: {{name}}",
+    "belt": "Belt",
+    "ageYears": "{{age}} y/o",
+    "addPresent": "Add a walk-in",
+    "searchMember": "Search a member",
+    "notFound": "Class not found.",
+    "close": "Close"
   }
 }

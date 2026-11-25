@@ -28,6 +28,7 @@ export function LocationDetails({ name, address, mapsUrl }: { name: string; addr
               accessibilityRole="link"
               // @ts-expect-error href est pris en charge par react-native-web
               href={safeUrl}
+              hrefAttrs={{ target: '_blank', rel: 'noopener' }}
               // sur le web, le href suffit (évite une double ouverture)
               onPress={Platform.OS === 'web' ? undefined : () => void Linking.openURL(safeUrl)}
               style={styles.link}

@@ -17,7 +17,22 @@ export async function fetchWeek(from: Date, to: Date, profileIds?: string[]): Pr
     .lt('starts_at', to.toISOString())
     .order('starts_at', { ascending: true });
   if (error) throw error;
-  const courses = (data ?? []) as unknown as RawCourse[];
+  return assemble((data ?? []) as unknown as RawCourse[], profileIds);
+}
+
+/** Un cours avec lieu, prof, compteur et mes inscriptions ; null s'il n'existe pas (ou n'est pas visible). */
+export async function fetchCourse(id: string, profileIds?: string[]): Promise<CourseRow | null> {
+  const { data, error } = await supabase
+    .from('courses')
+    .select('*, location:locations(id,name,address,maps_url)')
+    .eq('id', id)
+    .limit(1);
+  if (error) throw error;
+  const rows = await assemble((data ?? []) as unknown as RawCourse[], profileIds);
+  return rows[0] ?? null;
+}
+
+async function assemble(courses: RawCourse[], profileIds?: string[]): Promise<CourseRow[]> {
   if (courses.length === 0) return [];
 
   const courseIds = courses.map((c) => c.id);
@@ -70,3 +85,22 @@ async function call(fn: 'book_course' | 'unbook_course', courseId: string, profi
 
 export const bookCourse = (courseId: string, profileId?: string) => call('book_course', courseId, profileId);
 export const unbookCourse = (courseId: string, profileId?: string) => call('unbook_course', courseId, profileId);
+
+async function rpcKey(run: () => PromiseLike<{ error: { code?: string; hint?: string | null } | null }>): Promise<string | null> {
+  try {
+    const { error } = await run();
+    return error ? rpcErrorKey(error) : null;
+  } catch {
+    return 'errors.network';
+  }
+}
+
+export const takeSlot = (courseId: string) => rpcKey(() => supabase.rpc('take_slot', { p_course: courseId }));
+export const leaveSlot = (courseId: string) => rpcKey(() => supabase.rpc('leave_slot', { p_course: courseId }));
+export const assignProf = (courseId: string, profId: string | null) =>
+  // la RPC accepte null (cours vacant) ; les types générés l'ignorent
+  rpcKey(() => supabase.rpc('assign_prof', { p_course: courseId, p_prof: profId as string }));
+export const cancelCourse = (courseId: string, scope: 'one' | 'following') =>
+  rpcKey(() => supabase.rpc('cancel_course', { p_course: courseId, p_scope: scope }));
+export const setAttendance = (courseId: string, profileId: string, present: boolean) =>
+  rpcKey(() => supabase.rpc('set_attendance', { p_course: courseId, p_profile: profileId, p_present: present }));

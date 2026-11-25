@@ -108,7 +108,7 @@ export default function Courses() {
               lang={lang}
               selfId={profileId ?? ''}
               kids={kids}
-              onOpen={() => router.push(`/courses/${c.id}` as never)}
+              onOpen={() => router.push(`/courses/${c.id}`)}
               onChanged={() => void load()}
             />
           ))}

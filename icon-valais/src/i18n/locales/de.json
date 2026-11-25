@@ -249,6 +249,25 @@
     "me": "Ich",
     "openMaps": "In Google Maps öffnen",
     "empty": "Keine Kurse in dieser Woche.",
-    "loadError": "Die Kurse konnten nicht geladen werden."
+    "loadError": "Die Kurse konnten nicht geladen werden.",
+    "take": "Diesen Kurs übernehmen",
+    "leave": "Mich zurückziehen",
+    "assignProf": "Trainer zuweisen",
+    "noProf": "Kein Trainer",
+    "cancelCourse": "Kurs absagen",
+    "scopeOne": "Nur diesen Kurs",
+    "scopeFollowing": "Diesen und die folgenden Kurse",
+    "confirmCancel": "Absage bestätigen",
+    "cancelPrompt": "Diesen Kurs absagen? Die Angemeldeten werden benachrichtigt.",
+    "participants": "Teilnehmer",
+    "noParticipants": "Keine Anmeldungen.",
+    "presentLabel": "Anwesend: {{name}}",
+    "beltLabel": "Gürtel: {{name}}",
+    "belt": "Gürtel",
+    "ageYears": "{{age}} Jahre",
+    "addPresent": "Anwesenden hinzufügen",
+    "searchMember": "Mitglied suchen",
+    "notFound": "Kurs nicht gefunden.",
+    "close": "Schliessen"
   }
 }

@@ -249,6 +249,25 @@
     "me": "Moi",
     "openMaps": "Ouvrir dans Google Maps",
     "empty": "Aucun cours cette semaine.",
-    "loadError": "Impossible de charger les cours."
+    "loadError": "Impossible de charger les cours.",
+    "take": "Prendre ce cours",
+    "leave": "Me retirer",
+    "assignProf": "Assigner un prof",
+    "noProf": "Aucun prof",
+    "cancelCourse": "Annuler le cours",
+    "scopeOne": "Ce cours",
+    "scopeFollowing": "Ce cours et les suivants",
+    "confirmCancel": "Confirmer l'annulation",
+    "cancelPrompt": "Annuler ce cours ? Les inscrits seront prévenus.",
+    "participants": "Participants",
+    "noParticipants": "Aucun inscrit.",
+    "presentLabel": "Présent : {{name}}",
+    "beltLabel": "Ceinture : {{name}}",
+    "belt": "Ceinture",
+    "ageYears": "{{age}} ans",
+    "addPresent": "Ajouter un présent",
+    "searchMember": "Rechercher un membre",
+    "notFound": "Cours introuvable.",
+    "close": "Fermer"
   }
 }
