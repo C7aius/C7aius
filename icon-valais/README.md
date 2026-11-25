@@ -107,11 +107,19 @@ deno test --config supabase/functions/deno.json supabase/functions/_shared   # E
 
 ### Test de bout en bout (Playwright)
 
-`e2e/smoke.e2e.mjs` pilote l'application web contre la stack locale : inscription élève, inscription
-professeur (écran « en attente »), validation par un administrateur, inscription d'un mineur
-(écran de consentement parental, adresse du parent affichée, pas de faux « e-mail envoyé »), changement
-de langue, langue conservée après reconnexion et rechargement, et « mot de passe oublié » de bout en bout
-(lien lu dans Mailpit, nouveau mot de passe, connexion).
+`e2e/smoke.e2e.mjs` pilote l'application web contre la stack locale (13 flux). Plan 1 : inscription
+élève, inscription professeur (écran « en attente »), validation par un administrateur, inscription d'un
+mineur (écran de consentement parental, adresse du parent affichée, pas de faux « e-mail envoyé »),
+changement de langue, langue conservée après reconnexion et rechargement, « mot de passe oublié » de bout
+en bout (lien lu dans Mailpit, nouveau mot de passe, connexion). Plan 2 (cours, flux 8 à 13, enchaînés) :
+l'admin crée un cours récurrent (3 occurrences) visible dans le planning ; un élève réserve, se désinscrit
+puis réserve de nouveau ; un prof prend le créneau vacant ; le prof fait l'appel (cours déplacé dans le
+passé proche en SQL) ; l'admin annule « ce cours et les suivants » (statut « Annulé » et lignes
+`course_cancelled` dans `notification_outbox`, vérifiées en SQL) ; `process_course_schedule()` appelé en
+SQL fait passer un cours vacant commencé en « Open Mat » (et écrit les lignes `slot_vacant` d'un cours
+vacant dans moins de 24 h). Les étapes de mise en place (promotion de l'admin, déplacement d'un cours dans
+le passé, appel de `process_course_schedule()`, lecture de l'outbox) passent par `docker exec ... psql`.
+En cas d'échec d'un flux, une capture `FAIL-<n>.png` est écrite dans `SHOT_DIR`.
 
 ```bash
 npx supabase start
@@ -131,6 +139,28 @@ Remarques : la stack locale limite l'envoi d'e-mails d'authentification (`auth.r
 2 par heure) : relancer le test plusieurs fois dans l'heure peut faire échouer le flux « mot de passe
 oublié » (`npx supabase db reset` remet le compteur à zéro). Avec `CI=1`, Metro ne surveille pas les
 fichiers : relancer `expo start` après une modification du code.
+
+### Ordre des tests sur la base locale
+
+Les tests pgTAP (`npx supabase test db`) supposent une base fraîchement réinitialisée : après un passage du
+test e2e (comptes, cours et notifications laissés en base), certains tests comptant les lignes d'outbox
+échouent. Lancer `npx supabase db reset` avant `npx supabase test db` (et avant chaque e2e si le compteur
+d'e-mails d'authentification est atteint).
+
+### Limites des notifications en local
+
+- Les notifications push réelles (Expo Push vers un appareil) ne sont testables que sur un téléphone, une
+  fois l'application construite (plan 5) : le test e2e vérifie uniquement les lignes écrites dans
+  `notification_outbox` (annulation, créneau vacant) et pas leur livraison. Sur le web, l'enregistrement
+  du jeton est ignoré.
+- Le cron `send-push` ne fait rien tant que les secrets Vault `functions_url` et `service_role_key` n'existent
+  pas (voir « Notifications et tâches planifiées »).
+- `npx tsc --noEmit` s'appuie sur les types de routes générés dans `.expo/types` (dossier ignoré par git) :
+  sur un clone neuf, ou si `tsc` se plaint de routes inconnues (`/courses/new`, `/admin/locations`…),
+  lancer une fois `npx expo start` (puis quitter) pour les régénérer.
+- Une route de `Tabs` masquée par `href: null` est redirigée vers `/` par expo-router : le dossier
+  `courses` (détail, création, modification) n'est donc pas masqué mais sans bouton d'onglet
+  (`tabBarItemStyle: { display: 'none' }`).
 
 ## Mot de passe oublié
 
