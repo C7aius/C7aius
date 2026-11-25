@@ -166,6 +166,7 @@ export type Database = {
         Returns: undefined;
       };
       create_child_profile: { Args: { p: Json }; Returns: string };
+      current_account_active: { Args: Record<PropertyKey, never>; Returns: boolean };
       current_profile_id: { Args: Record<PropertyKey, never>; Returns: string };
       is_account_active: {
         Args: {

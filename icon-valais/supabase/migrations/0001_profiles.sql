@@ -58,7 +58,13 @@ create table public.profiles (
   language           public.lang not null default 'fr',
   created_at         timestamptz not null default now(),
   -- un profil a soit un login, soit un parent (profil enfant sans login)
-  constraint profiles_login_or_parent check (auth_user_id is not null or parent_profile_id is not null)
+  constraint profiles_login_or_parent check (auth_user_id is not null or parent_profile_id is not null),
+  -- ceintures enfant (grise, jaune, orange, verte) réservées aux moins de 18 ans
+  -- (même règle que beltOptions() dans src/domain/belts.ts) ; s'applique à
+  -- l'inscription, à set_belt, à create_child_profile et aux changements d'âge.
+  constraint profiles_kid_belt_age check (
+    bjj_belt is null or age < 18 or bjj_belt not in ('grise', 'jaune', 'orange', 'verte')
+  )
 );
 
 create index profiles_parent_profile_id_idx on public.profiles (parent_profile_id);
@@ -99,6 +105,14 @@ language sql stable set search_path = '' as $$
     when p.age < 16 and p.parent_consent_at is null then false
     else true
   end;
+$$;
+
+-- Le compte de l'appelant est-il actif ? (false sans profil)
+create function public.current_account_active() returns bool
+language sql stable security definer set search_path = '' as $$
+  select coalesce(
+    (select public.is_account_active(p) from public.profiles p where p.auth_user_id = auth.uid()),
+    false);
 $$;
 
 -- ---------------------------------------------------------------------------
@@ -186,6 +200,12 @@ begin
   then
     raise exception 'protected profile column' using errcode = '42501';
   end if;
+  -- un mineur inscrit seul, sans consentement parental, ne peut pas
+  -- contourner le consentement en se déclarant âgé de 16 ans ou plus
+  if old.parent_profile_id is null and old.age < 16 and old.parent_consent_at is null
+     and new.age >= 16 then
+    raise exception 'age change requires parental consent' using errcode = '42501';
+  end if;
   return new;
 end;
 $$;
@@ -239,7 +259,10 @@ grant select, update, delete on public.profiles to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Vue publique (propriétaire postgres, sans security_invoker : contourne la
--- RLS volontairement et n'expose que des colonnes non sensibles)
+-- RLS volontairement et n'expose que des colonnes non sensibles).
+-- Vide si le compte de l'appelant n'est pas actif (prof en attente, mineur
+-- sans consentement). display_role = 'prof' seulement pour l'admin et les
+-- profs validés.
 -- ---------------------------------------------------------------------------
 create view public.public_profiles as
   select
@@ -248,8 +271,12 @@ create view public.public_profiles as
     last_name,
     bjj_belt,
     sports,
-    (case when role = 'eleve' then 'eleve' else 'prof' end)::text as display_role
-  from public.profiles;
+    (case
+       when role = 'admin' or (role = 'prof' and prof_status = 'valide') then 'prof'
+       else 'eleve'
+     end)::text as display_role
+  from public.profiles
+  where public.current_account_active();
 
 revoke all on public.public_profiles from anon, authenticated;
 grant select on public.public_profiles to authenticated;
@@ -262,6 +289,9 @@ language plpgsql security definer set search_path = '' as $$
 begin
   if not (public.is_active_prof() or public.is_admin()) then
     raise exception 'set_belt: active prof or admin required' using errcode = '42501';
+  end if;
+  if p_profile = public.current_profile_id() and not public.is_admin() then
+    raise exception 'set_belt: a prof cannot set their own belt' using errcode = '42501';
   end if;
   update public.profiles set bjj_belt = p_belt where id = p_profile;
   if not found then
@@ -321,7 +351,8 @@ end;
 $$;
 
 -- Crée un profil enfant (sans login) rattaché à l'appelant, qui doit être
--- majeur (sinon un mineur sans consentement contournerait le consentement).
+-- majeur (sinon un mineur sans consentement contournerait le consentement)
+-- et dont le compte doit être actif.
 -- Clés lues dans p : first_name, last_name, age (obligatoires), sports,
 -- bjj_belt, years_grappling, years_mma, phone, language.
 -- Le rôle est toujours 'eleve' ; les colonnes protégées ne sont jamais lues.
@@ -334,6 +365,9 @@ begin
   select * into v_parent from public.profiles where auth_user_id = auth.uid();
   if v_parent.id is null or v_parent.age < 18 then
     raise exception 'create_child_profile: adult account required' using errcode = '42501';
+  end if;
+  if not public.is_account_active(v_parent) then
+    raise exception 'create_child_profile: active account required' using errcode = '42501';
   end if;
   if coalesce(p->>'first_name', '') = '' or coalesce(p->>'last_name', '') = '' or p->>'age' is null then
     raise exception 'create_child_profile: first_name, last_name and age are required' using errcode = '22023';
@@ -369,6 +403,7 @@ revoke all on function public.current_profile_id() from public, anon;
 revoke all on function public.is_admin() from public, anon;
 revoke all on function public.is_active_prof() from public, anon;
 revoke all on function public.is_account_active(public.profiles) from public, anon;
+revoke all on function public.current_account_active() from public, anon;
 revoke all on function public.set_belt(uuid, public.belt) from public, anon;
 revoke all on function public.admin_set_prof_status(uuid, public.prof_status) from public, anon;
 revoke all on function public.admin_set_role(uuid, public.user_role) from public, anon;
@@ -381,6 +416,7 @@ grant execute on function public.current_profile_id() to authenticated;
 grant execute on function public.is_admin() to authenticated;
 grant execute on function public.is_active_prof() to authenticated;
 grant execute on function public.is_account_active(public.profiles) to authenticated;
+grant execute on function public.current_account_active() to authenticated;
 grant execute on function public.set_belt(uuid, public.belt) to authenticated;
 grant execute on function public.admin_set_prof_status(uuid, public.prof_status) to authenticated;
 grant execute on function public.admin_set_role(uuid, public.user_role) to authenticated;

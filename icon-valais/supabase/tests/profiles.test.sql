@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(49);
+select plan(69);
 
 -- ---------------------------------------------------------------------------
 -- Helpers
@@ -39,6 +39,8 @@ select pg_temp.signup('55555555-5555-5555-5555-555555555555', 'ado@test.ch',
   '{"first_name":"Ali","last_name":"Ado","age":15,"sports":["grappling"],"years_grappling":1,"parent_email":"maman@test.ch"}');
 select pg_temp.signup('66666666-6666-6666-6666-666666666666', 'parent@test.ch',
   '{"first_name":"Pierre","last_name":"Parent","age":42,"sports":["jjb"],"bjj_belt":"bleue"}');
+select pg_temp.signup('77777777-7777-7777-7777-777777777777', 'refuse@test.ch',
+  '{"first_name":"Rita","last_name":"Refus","age":35,"sports":["mma"],"years_mma":3,"coach_years":1,"role":"prof"}');
 
 -- Bootstrap admin (service-level, as postgres)
 update public.profiles set role = 'admin'
@@ -48,7 +50,7 @@ update public.profiles set role = 'admin'
 -- handle_new_user
 -- ---------------------------------------------------------------------------
 select is((select count(*)::int from public.profiles p join auth.users u on u.id = p.auth_user_id
-            where u.email in ('eleve@test.ch','pirate@test.ch','prof@test.ch','admin@test.ch','ado@test.ch','parent@test.ch')), 6, 'un profil par auth.users');
+            where u.email in ('eleve@test.ch','pirate@test.ch','prof@test.ch','admin@test.ch','ado@test.ch','parent@test.ch','refuse@test.ch')), 7, 'un profil par auth.users');
 select set_config('test.total', (select count(*) from public.profiles)::text, true);
 select is((select role::text from public.profiles where auth_user_id = '22222222-2222-2222-2222-222222222222'),
           'eleve', 'role admin demandé à l''inscription → eleve');
@@ -66,6 +68,9 @@ select is((select language::text from public.profiles where auth_user_id = '1111
           'fr', 'langue par défaut fr');
 select is((select parent_email from public.profiles where auth_user_id = '55555555-5555-5555-5555-555555555555'),
           'maman@test.ch', 'parent_email recopié');
+select throws_ok($$ select pg_temp.signup('88888888-8888-8888-8888-888888888888', 'kidbelt@test.ch',
+                    '{"first_name":"A","last_name":"B","age":25,"sports":["jjb"],"bjj_belt":"grise"}') $$,
+                 '23514', null, 'inscription adulte avec ceinture enfant → refusée');
 
 -- ---------------------------------------------------------------------------
 -- is_account_active
@@ -92,7 +97,7 @@ select throws_ok($$ update public.profiles set student_status = 'valide' where a
 select throws_ok($$ update public.profiles set parent_consent_at = now() where auth_user_id = auth.uid() $$,
                  '42501', null, 'élève : parent_consent_at non modifiable');
 select throws_ok($$ update public.profiles set auth_user_id = '22222222-2222-2222-2222-222222222222' where auth_user_id = auth.uid() $$,
-                 null, null, 'élève : auth_user_id non modifiable');
+                 '42501', null, 'élève : auth_user_id non modifiable');
 -- Le paramètre de session ne peut pas être utilisé par le client pour contourner la protection
 select set_config('app.bypass_protect', 'on', true);
 select throws_ok($$ update public.profiles set role = 'admin' where auth_user_id = auth.uid() $$,
@@ -120,6 +125,39 @@ select is((select phone from public.profiles where auth_user_id = '22222222-2222
           null, 'élève : update d''un autre profil sans effet');
 
 -- ---------------------------------------------------------------------------
+-- Consentement : un mineur inscrit seul ne peut pas changer son âge à >= 16
+-- ---------------------------------------------------------------------------
+select pg_temp.login('55555555-5555-5555-5555-555555555555');
+select throws_ok($$ update public.profiles set age = 16 where auth_user_id = auth.uid() $$,
+                 '42501', null, '15 ans sans consentement : âge -> 16 refusé');
+select lives_ok($$ update public.profiles set phone = '078 555 55 55' where auth_user_id = auth.uid() $$,
+                '15 ans sans consentement : autres champs modifiables');
+select is((select count(*)::int from public.public_profiles), 0, 'mineur sans consentement : public_profiles vide');
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- public_profiles et prof en attente
+-- ---------------------------------------------------------------------------
+select pg_temp.login('33333333-3333-3333-3333-333333333333');
+select is((select count(*)::int from public.public_profiles), 0, 'prof en attente : public_profiles vide');
+select throws_ok($$ select public.create_child_profile('{"first_name":"K","last_name":"P","age":8,"sports":["mma"]}') $$,
+                 '42501', null, 'compte inactif : create_child_profile refusé');
+reset role;
+select pg_temp.login('11111111-1111-1111-1111-111111111111');
+select ok((select count(*)::int from public.public_profiles) >= 7, 'utilisateur actif : public_profiles lisible');
+select is((select display_role from public.public_profiles where id = pg_temp.pid('33333333-3333-3333-3333-333333333333')),
+          'eleve', 'prof en attente : display_role = eleve');
+reset role;
+select pg_temp.login('44444444-4444-4444-4444-444444444444');
+select lives_ok($$ select public.admin_set_prof_status(pg_temp.pid('77777777-7777-7777-7777-777777777777'), 'refuse') $$,
+                'admin refuse un prof');
+reset role;
+select pg_temp.login('11111111-1111-1111-1111-111111111111');
+select is((select display_role from public.public_profiles where id = pg_temp.pid('77777777-7777-7777-7777-777777777777')),
+          'eleve', 'prof refusé : display_role = eleve');
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Prof en attente puis validé
 -- ---------------------------------------------------------------------------
 select pg_temp.login('33333333-3333-3333-3333-333333333333');
@@ -140,6 +178,14 @@ select lives_ok($$ select public.set_belt(pg_temp.pid('11111111-1111-1111-1111-1
 reset role;
 select is((select bjj_belt::text from public.profiles where auth_user_id = '11111111-1111-1111-1111-111111111111'),
           'bleue', 'ceinture mise à jour');
+select pg_temp.login('33333333-3333-3333-3333-333333333333');
+select throws_ok($$ select public.set_belt(public.current_profile_id(), 'blanche') $$,
+                 '42501', null, 'un prof ne modifie pas sa propre ceinture');
+reset role;
+select pg_temp.login('11111111-1111-1111-1111-111111111111');
+select is((select display_role from public.public_profiles where id = pg_temp.pid('33333333-3333-3333-3333-333333333333')),
+          'prof', 'prof validé : display_role = prof');
+reset role;
 
 -- ---------------------------------------------------------------------------
 -- Admin
@@ -152,9 +198,18 @@ select lives_ok($$ select public.admin_set_role(pg_temp.pid('22222222-2222-2222-
 select is((select count(*)::int from public.profiles), current_setting('test.total')::int, 'admin lit tous les profils');
 select lives_ok($$ update public.profiles set student_status = 'valide' where auth_user_id = '11111111-1111-1111-1111-111111111111' $$,
                 'admin modifie directement une colonne protégée');
+select lives_ok($$ select public.set_belt(public.current_profile_id(), 'marron') $$,
+                'l''admin modifie sa propre ceinture');
+select throws_ok($$ select public.set_belt(pg_temp.pid('11111111-1111-1111-1111-111111111111'), 'grise') $$,
+                 '23514', null, 'set_belt : ceinture enfant sur un adulte → refusée');
 reset role;
+select is((select student_status::text from public.profiles where auth_user_id = '11111111-1111-1111-1111-111111111111'),
+          'valide', 'student_status modifié par l''admin');
+select is((select bjj_belt::text from public.profiles where auth_user_id = '44444444-4444-4444-4444-444444444444'),
+          'marron', 'ceinture de l''admin mise à jour');
 select is((select paid_until from public.profiles where auth_user_id = '11111111-1111-1111-1111-111111111111'),
-          make_date(extract(year from now())::int, 12, 31), 'paid_until = 31.12 de l''année courante');
+          make_date(extract(year from now() at time zone 'Europe/Zurich')::int, 12, 31),
+          'paid_until = 31.12 de l''année courante (Europe/Zurich)');
 select is((select role::text || '/' || prof_status::text from public.profiles
             where auth_user_id = '22222222-2222-2222-2222-222222222222'), 'prof/valide', 'rôle prof attribué par l''admin');
 
@@ -174,6 +229,15 @@ select is((select first_name || '/' || role::text || '/' || bjj_belt::text from 
 update public.profiles set phone = '027 111 11 11' where id = (select v from ids where k = 'child');
 select is((select phone from public.profiles where id = (select v from ids where k = 'child')), '027 111 11 11',
           'le parent modifie son enfant');
+select throws_ok($$ update public.profiles set bjj_belt = 'jaune' where id = (select v from ids where k = 'child') $$,
+                 '42501', null, 'le parent ne modifie pas la ceinture de l''enfant');
+select throws_ok($$ update public.profiles set parent_profile_id = pg_temp.pid('11111111-1111-1111-1111-111111111111')
+                     where id = (select v from ids where k = 'child') $$,
+                 '42501', null, 'le parent ne modifie pas parent_profile_id de l''enfant');
+select throws_ok($$ update public.profiles set age = 18 where id = (select v from ids where k = 'child') $$,
+                 '23514', null, 'âge -> 18 avec ceinture enfant → refusé');
+select throws_ok($$ select public.create_child_profile('{"first_name":"Max","last_name":"Parent","age":20,"sports":["jjb"],"bjj_belt":"verte"}') $$,
+                 '23514', null, 'create_child_profile : ceinture enfant à 20 ans → refusée');
 reset role;
 select is((select public.is_account_active(p) from public.profiles p where id = (select v from ids where k = 'child')),
           true, 'enfant créé par un parent → actif sans consentement');
