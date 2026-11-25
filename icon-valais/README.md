@@ -84,7 +84,8 @@ est activée sur le projet Expo). `send-push` réserve ses lignes avec `claim_ou
 fois la même notification. Chaque ligne reçoit `sent_at` (au moins un appareil accepté) ou `error` :
 `no_push_token`, code d'erreur Expo, `http_4xx` (message refusé, renvoyé seul), `max_attempts`
 (5 tentatives) ou `expired` (créneau vacant ou annulation d'un cours déjà commencé). Si Expo est
-injoignable, la ligne est libérée et réessayée la minute suivante. Les jetons signalés
+injoignable, limite le débit (429) ou refuse le jeton d'accès (401/403), la ligne est libérée et
+réessayée la minute suivante (jusqu'à `max_attempts`). Les jetons signalés
 `DeviceNotRegistered` sont supprimés ; un profil garde au plus 10 jetons. Les textes (fr/de/en/ru
 selon `profiles.language`) indiquent le sport et la date et l'heure du cours (heure de Zurich), et le
 prénom de l'enfant quand un parent est notifié pour lui.

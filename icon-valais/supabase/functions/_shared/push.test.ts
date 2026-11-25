@@ -268,6 +268,22 @@ Deno.test('handleSendPush: 429 → pas de découpage, lignes en attente', async 
   assertEquals(log.released, [1, 2]);
 });
 
+for (const status of [401, 403]) {
+  Deno.test(`handleSendPush: ${status} (jeton d'accès Expo) → pas de découpage, lignes en attente`, async () => {
+    const { deps, log } = fakeDeps({
+      rows: [row(1, 'p-a', 'slot_vacant'), row(2, 'p-b', 'slot_vacant')],
+      tokens: [{ token: T1, profile_id: 'p-a' }, { token: T2, profile_id: 'p-b' }],
+      respond: () => new Response('{"errors":[{"code":"UNAUTHORIZED"}]}', { status }),
+    });
+    const res = await handleSendPush(post(`Bearer ${KEY}`), deps);
+    assertEquals(log.batches.length, 1);
+    assertEquals(log.errors, [], `pas de http_${status}`);
+    assertEquals(log.sent, []);
+    assertEquals(log.released, [1, 2]);
+    assertEquals(res.body.pending, 2);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Textes : sport, date et heure locales (Europe/Zurich), prénom de l'enfant
 // ---------------------------------------------------------------------------

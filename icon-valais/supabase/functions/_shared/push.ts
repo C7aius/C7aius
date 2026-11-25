@@ -299,7 +299,9 @@ async function sendBatch(part: ExpoMessage[], deps: SendPushDeps): Promise<(Expo
   }
   console.error('expo push: http', res.status);
   await res.body?.cancel();
-  if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+  // 401/403 : jeton d'accès Expo absent, invalide ou révoqué (configuration du
+  // projet, pas le message) → comme 429/5xx, les lignes restent en attente.
+  if (res.status >= 400 && res.status < 500 && ![401, 403, 429].includes(res.status)) {
     if (part.length === 1) return [{ status: 'error', details: { error: `http_${res.status}` } }];
     const out: (ExpoTicket | null)[] = [];
     for (const m of part) out.push(...(await sendBatch([m], deps)));
