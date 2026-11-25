@@ -32,6 +32,16 @@ export function rpcErrorKey(error: { code?: string; hint?: string | null } | nul
       return 'errors.locationArchived';
     case 'no_default_location':
       return 'errors.noDefaultLocation';
+    case 'default_location_archived':
+      return 'errors.defaultLocationArchived';
+    case 'default_required':
+      return 'errors.defaultRequired';
+    case 'invalid_prof':
+      return 'errors.invalidProf';
+    case 'missing_field':
+      return 'errors.missingField';
+    case 'repeat_before_start':
+      return 'errors.repeatBeforeStart';
   }
   switch (error?.code) {
     case '42501':

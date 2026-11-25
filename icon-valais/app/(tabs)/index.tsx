@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
@@ -19,7 +19,7 @@ const WEEK_MS = 7 * 24 * 3600 * 1000;
 
 export default function Courses() {
   const { t, i18n } = useTranslation();
-  const { profile } = useAuth();
+  const { profile, isActive } = useAuth();
   const router = useRouter();
   const [anchor, setAnchor] = useState(() => new Date());
   const [rows, setRows] = useState<CourseRow[]>([]);
@@ -32,6 +32,7 @@ export default function Courses() {
 
   const { from, to } = useMemo(() => weekRange(anchor), [anchor]);
   const profileId = profile?.id;
+  const canCreate = profile?.role === 'admin' || (profile?.role === 'prof' && isActive);
 
   const requestId = useRef(0);
   const load = useCallback(async () => {
@@ -82,7 +83,16 @@ export default function Courses() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
-      <WeekNav from={from} to={to} onPrev={() => shift(-1)} onNext={() => shift(1)} />
+      <View style={styles.header}>
+        <View style={styles.headerNav}>
+          <WeekNav from={from} to={to} onPrev={() => shift(-1)} onNext={() => shift(1)} />
+        </View>
+        {canCreate ? (
+          <Pressable accessibilityRole="button" accessibilityLabel={t('courses.newCourse')} onPress={() => router.push('/courses/new')} style={styles.plus}>
+            <Text style={styles.plusText}>+</Text>
+          </Pressable>
+        ) : null}
+      </View>
       <View style={styles.filters}>
         <Chip label={t('courses.allLocations')} selected={locFilter === null} onPress={() => setLocFilter(null)} />
         {locations.map(([id, name]) => (
@@ -121,6 +131,10 @@ export default function Courses() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.anthracite },
   container: { padding: 16, paddingTop: 60 },
+  header: { flexDirection: 'row', alignItems: 'center' },
+  headerNav: { flex: 1 },
+  plus: { backgroundColor: colors.orange, borderRadius: 22, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
+  plusText: { color: colors.white, fontSize: 26, fontWeight: '700', lineHeight: 30 },
   filters: { flexDirection: 'row', flexWrap: 'wrap' },
   day: { color: colors.orange, fontSize: 18, fontWeight: '700', marginTop: 12, marginBottom: 8 },
   empty: { color: colors.white, textAlign: 'center', marginTop: 24 },

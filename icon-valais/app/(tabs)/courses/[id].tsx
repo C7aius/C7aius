@@ -80,6 +80,7 @@ export default function CourseDetail() {
   const canLeave = isProf && open && isMine && !course.is_private;
   const canAssign = isAdmin && open;
   const canCancel = open && (isAdmin || (isProf && course.created_by === selfId && !course.is_private));
+  const canEdit = canCancel; // mêmes conditions que l'annulation : admin, ou prof créateur d'un cours non privé
   const canRoll = !cancelled && (isAdmin || (isProf && isMine));
 
   // Action puis rechargement, y compris en cas d'erreur (ex. « déjà pris » : l'état a changé).
@@ -133,6 +134,9 @@ export default function CourseDetail() {
             <AssignProfPicker courseId={course.id} currentProfId={course.prof_id} onDone={() => void act(async () => null)} />
           ) : null}
         </View>
+      ) : null}
+      {canEdit ? (
+        <Button title={t('common.edit')} variant="secondary" onPress={() => router.push(`/courses/${course.id}/edit`)} />
       ) : null}
       {canCancel ? (
         <View>

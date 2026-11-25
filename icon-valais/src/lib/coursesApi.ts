@@ -104,3 +104,45 @@ export const cancelCourse = (courseId: string, scope: 'one' | 'following') =>
   rpcKey(() => supabase.rpc('cancel_course', { p_course: courseId, p_scope: scope }));
 export const setAttendance = (courseId: string, profileId: string, present: boolean) =>
   rpcKey(() => supabase.rpc('set_attendance', { p_course: courseId, p_profile: profileId, p_present: present }));
+
+export type LocationRow = {
+  id: string;
+  name: string;
+  address: string;
+  maps_url: string;
+  is_default: boolean;
+  archived: boolean;
+};
+
+export type ProfOption = { id: string; first_name: string; last_name: string };
+
+/** Tous les lieux (les archivés aussi ; l'appelant filtre). Le lieu par défaut d'abord. */
+export async function fetchLocations(): Promise<LocationRow[]> {
+  const { data, error } = await supabase
+    .from('locations')
+    .select('id,name,address,maps_url,is_default,archived')
+    .order('name', { ascending: true });
+  if (error) throw error;
+  return ((data ?? []) as LocationRow[]).slice().sort((a, b) => Number(b.is_default) - Number(a.is_default));
+}
+
+/** Profs (et admins, affichés comme profs) proposables à un cours. */
+export async function fetchProfOptions(): Promise<ProfOption[]> {
+  const { data, error } = await supabase
+    .from('public_profiles')
+    .select('id,first_name,last_name')
+    .eq('display_role', 'prof')
+    .order('first_name', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as ProfOption[];
+}
+
+export const createCourse = (p: Record<string, unknown>, repeatUntil: string | null) =>
+  rpcKey(() =>
+    // la RPC accepte null (pas de répétition) ; les types générés l'ignorent
+    supabase.rpc('create_course', { p: p as never, p_repeat_until: repeatUntil as string }),
+  );
+export const updateCourse = (courseId: string, p: Record<string, unknown>, scope: 'one' | 'following') =>
+  rpcKey(() => supabase.rpc('update_course', { p_course: courseId, p: p as never, p_scope: scope }));
+export const saveLocation = (p: Record<string, unknown>) =>
+  rpcKey(() => supabase.rpc('admin_upsert_location', { p: p as never }));

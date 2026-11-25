@@ -147,7 +147,18 @@
     "parentEmailNone": "Адрес не указан",
     "parentEmailEdit": "Новый адрес родителя",
     "parentEmailSave": "Сохранить адрес родителя",
-    "parentEmailSaved": "Адрес родителя сохранён."
+    "parentEmailSaved": "Адрес родителя сохранён.",
+    "locations": "Места",
+    "locationAdd": "Добавить место",
+    "locationName": "Название",
+    "locationAddress": "Адрес",
+    "locationMaps": "Ссылка Google Maps (https://)",
+    "locationDefault": "Место по умолчанию",
+    "locationDefaultBadge": "По умолчанию",
+    "locationArchivedBadge": "В архиве",
+    "locationArchive": "Архивировать",
+    "locationRestore": "Восстановить",
+    "locationNone": "Нет мест."
   },
   "tabs": {
     "home": "Главная",
@@ -201,7 +212,12 @@
     "notBooked": "Профиль не записан на это занятие.",
     "invalidField": "Одно из полей недопустимо.",
     "locationArchived": "Это место в архиве.",
-    "noDefaultLocation": "Место по умолчанию не задано."
+    "noDefaultLocation": "Место по умолчанию не задано.",
+    "defaultLocationArchived": "Место по умолчанию нельзя архивировать.",
+    "defaultRequired": "Необходимо место по умолчанию.",
+    "invalidProf": "Этот тренер не подходит для этого занятия.",
+    "missingField": "Не заполнено обязательное поле.",
+    "repeatBeforeStart": "Дата окончания раньше первого занятия."
   },
   "pending": {
     "profTitle": "Аккаунт ожидает подтверждения",
@@ -268,6 +284,45 @@
     "addPresent": "Добавить присутствующего",
     "searchMember": "Найти участника",
     "notFound": "Занятие не найдено.",
-    "close": "Закрыть"
+    "close": "Закрыть",
+    "newCourse": "Новое занятие",
+    "form": {
+      "newTitle": "Новое занятие",
+      "editTitle": "Изменить занятие",
+      "sport": "Вид спорта",
+      "level": "Аудитория",
+      "kind": "Тип",
+      "kindNormal": "Занятие",
+      "date": "Дата (ГГГГ-ММ-ДД)",
+      "startTime": "Начало (ЧЧ:ММ)",
+      "endTime": "Конец (ЧЧ:ММ)",
+      "places": "Места",
+      "priceMember": "Цена для членов клуба (CHF)",
+      "priceNonMember": "Цена для остальных (CHF)",
+      "private": "Частное занятие",
+      "prof": "Тренер",
+      "recurring": "Повторяющееся занятие",
+      "repeatUntil": "Повторять каждую неделю до (ГГГГ-ММ-ДД)",
+      "repeatUntilFixed": "Каждую неделю до {{date}}",
+      "repeatMax": "Максимум: {{date}}",
+      "scope": "Применить к",
+      "create": "Создать занятие",
+      "noLocation": "Нет доступных мест.",
+      "forbidden": "Вы не можете изменить это занятие.",
+      "err": {
+        "location": "Выберите место",
+        "date": "Неверная дата (ГГГГ-ММ-ДД)",
+        "time": "Неверное время (ЧЧ:ММ)",
+        "places": "От 1 до 100 мест",
+        "price": "Неверная цена (0 или больше)",
+        "endBeforeStart": "Конец должен быть позже начала",
+        "repeatRequired": "Укажите дату окончания повторения",
+        "repeatBeforeStart": "Дата окончания раньше первого занятия",
+        "repeatTooFar": "Дата окончания слишком далеко",
+        "nameTooLong": "Не более 60 символов",
+        "addressTooLong": "Не более 200 символов",
+        "mapsUrl": "Ссылка должна начинаться с https://"
+      }
+    }
   }
 }

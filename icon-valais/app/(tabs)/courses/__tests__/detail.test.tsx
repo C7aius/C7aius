@@ -4,12 +4,13 @@ import { initI18n } from '@/src/i18n';
 import CourseDetail from '../[id]';
 
 const mockRpc = jest.fn();
+const mockPush = jest.fn();
 let mockTables: Record<string, unknown[]> = {};
 let mockAuth: { profile: { id: string; role: string }; isActive: boolean };
 
 jest.mock('@/src/auth/AuthProvider', () => ({ useAuth: () => mockAuth }));
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ back: jest.fn(), replace: jest.fn() }),
+  useRouter: () => ({ back: jest.fn(), replace: jest.fn(), push: mockPush }),
   useLocalSearchParams: () => ({ id: 'c1' }),
   useFocusEffect: (cb: () => void) => {
     require('react').useEffect(cb, [cb]);
@@ -67,7 +68,34 @@ it('student sees no prof/admin action', async () => {
   expect(screen.queryByText('Prendre ce cours')).toBeNull();
   expect(screen.queryByText('Assigner un prof')).toBeNull();
   expect(screen.queryByText('Annuler le cours')).toBeNull();
+  expect(screen.queryByText('Modifier')).toBeNull();
   expect(screen.queryByText('Participants')).toBeNull();
+});
+
+it('creator prof can edit a non-private course', async () => {
+  mockAuth = { profile: { id: 'pr1', role: 'prof' }, isActive: true };
+  mockTables.courses = [course({ created_by: 'pr1' })];
+  await render(<CourseDetail />);
+  await fireEvent.press(await screen.findByText('Modifier'));
+  expect(mockPush).toHaveBeenCalledWith('/courses/c1/edit');
+  await settle();
+});
+
+it('creator prof cannot edit a private course', async () => {
+  mockAuth = { profile: { id: 'pr1', role: 'prof' }, isActive: true };
+  mockTables.courses = [course({ created_by: 'pr1', is_private: true })];
+  await render(<CourseDetail />);
+  expect(await screen.findByText('Dojo Sion ▾')).toBeTruthy();
+  expect(screen.queryByText('Modifier')).toBeNull();
+  await settle();
+});
+
+it('admin can edit a private course', async () => {
+  mockAuth = { profile: { id: 'ad', role: 'admin' }, isActive: true };
+  mockTables.courses = [course({ is_private: true })];
+  await render(<CourseDetail />);
+  expect(await screen.findByText('Modifier')).toBeTruthy();
+  await settle();
 });
 
 it('prof takes a vacant slot; slot_taken shows message and reloads', async () => {

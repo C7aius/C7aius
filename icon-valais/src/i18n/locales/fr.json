@@ -147,7 +147,18 @@
     "parentEmailNone": "Aucune adresse",
     "parentEmailEdit": "Nouvelle adresse du parent",
     "parentEmailSave": "Enregistrer l'e-mail du parent",
-    "parentEmailSaved": "E-mail du parent enregistré."
+    "parentEmailSaved": "E-mail du parent enregistré.",
+    "locations": "Lieux",
+    "locationAdd": "Ajouter un lieu",
+    "locationName": "Nom",
+    "locationAddress": "Adresse",
+    "locationMaps": "Lien Google Maps (https://)",
+    "locationDefault": "Lieu par défaut",
+    "locationDefaultBadge": "Par défaut",
+    "locationArchivedBadge": "Archivé",
+    "locationArchive": "Archiver",
+    "locationRestore": "Restaurer",
+    "locationNone": "Aucun lieu."
   },
   "tabs": {
     "home": "Accueil",
@@ -201,7 +212,12 @@
     "notBooked": "Ce profil n'est pas inscrit à ce cours.",
     "invalidField": "Un champ n'est pas valide.",
     "locationArchived": "Ce lieu est archivé.",
-    "noDefaultLocation": "Aucun lieu par défaut n'est défini."
+    "noDefaultLocation": "Aucun lieu par défaut n'est défini.",
+    "defaultLocationArchived": "Le lieu par défaut ne peut pas être archivé.",
+    "defaultRequired": "Un lieu par défaut est obligatoire.",
+    "invalidProf": "Ce prof n'est pas valide pour ce cours.",
+    "missingField": "Un champ obligatoire est manquant.",
+    "repeatBeforeStart": "La date de fin est avant le premier cours."
   },
   "pending": {
     "profTitle": "Compte en attente de validation",
@@ -268,6 +284,45 @@
     "addPresent": "Ajouter un présent",
     "searchMember": "Rechercher un membre",
     "notFound": "Cours introuvable.",
-    "close": "Fermer"
+    "close": "Fermer",
+    "newCourse": "Nouveau cours",
+    "form": {
+      "newTitle": "Nouveau cours",
+      "editTitle": "Modifier le cours",
+      "sport": "Sport",
+      "level": "Public",
+      "kind": "Type",
+      "kindNormal": "Cours",
+      "date": "Date (AAAA-MM-JJ)",
+      "startTime": "Début (HH:MM)",
+      "endTime": "Fin (HH:MM)",
+      "places": "Places",
+      "priceMember": "Prix adhérent (CHF)",
+      "priceNonMember": "Prix non-adhérent (CHF)",
+      "private": "Cours privé",
+      "prof": "Prof",
+      "recurring": "Cours récurrent",
+      "repeatUntil": "Répéter chaque semaine jusqu'au (AAAA-MM-JJ)",
+      "repeatUntilFixed": "Chaque semaine jusqu'au {{date}}",
+      "repeatMax": "Maximum : {{date}}",
+      "scope": "Appliquer à",
+      "create": "Créer le cours",
+      "noLocation": "Aucun lieu disponible.",
+      "forbidden": "Vous ne pouvez pas modifier ce cours.",
+      "err": {
+        "location": "Choisissez un lieu",
+        "date": "Date invalide (AAAA-MM-JJ)",
+        "time": "Heure invalide (HH:MM)",
+        "places": "Entre 1 et 100 places",
+        "price": "Prix invalide (0 ou plus)",
+        "endBeforeStart": "La fin doit être après le début",
+        "repeatRequired": "Indiquez la date de fin de la répétition",
+        "repeatBeforeStart": "La date de fin est avant le premier cours",
+        "repeatTooFar": "Date de fin trop lointaine",
+        "nameTooLong": "60 caractères au maximum",
+        "addressTooLong": "200 caractères au maximum",
+        "mapsUrl": "Le lien doit commencer par https://"
+      }
+    }
   }
 }

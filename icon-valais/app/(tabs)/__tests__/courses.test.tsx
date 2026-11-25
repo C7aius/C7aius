@@ -8,10 +8,11 @@ const mockPush = jest.fn();
 let mockTables: Record<string, unknown[]> = {};
 let mockCoursesQueue: Promise<unknown[]>[] | null = null;
 let mockCoursesCalls = 0;
+let mockAuth: { profile: { id: string; role: string }; isActive: boolean } = { profile: { id: 'me', role: 'eleve' }, isActive: true };
 let mockKids: { id: string; first_name: string }[] = [];
 
 jest.mock('@/src/auth/AuthProvider', () => ({
-  useAuth: () => ({ profile: { id: 'me', role: 'eleve' }, ready: true }),
+  useAuth: () => ({ ...mockAuth, ready: true }),
 }));
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -51,6 +52,7 @@ beforeAll(async () => {
 });
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAuth = { profile: { id: 'me', role: 'eleve' }, isActive: true };
   mockCoursesQueue = null;
   mockCoursesCalls = 0;
   mockRpc.mockResolvedValue({ data: 'b1', error: null });
@@ -61,6 +63,27 @@ beforeEach(() => {
     course_booking_counts: [{ course_id: 'c1', booked: 3 }],
     bookings: [],
   };
+});
+
+it('shows no + button to a student', async () => {
+  await render(<Courses />);
+  await screen.findByText(/Marc Prof/);
+  expect(screen.queryByLabelText('Nouveau cours')).toBeNull();
+});
+
+it('shows no + button to a pending prof', async () => {
+  mockAuth = { profile: { id: 'me', role: 'prof' }, isActive: false };
+  await render(<Courses />);
+  await screen.findByText(/Marc Prof/);
+  expect(screen.queryByLabelText('Nouveau cours')).toBeNull();
+});
+
+it('an active prof gets a + button leading to the creation form', async () => {
+  mockAuth = { profile: { id: 'me', role: 'prof' }, isActive: true };
+  await render(<Courses />);
+  await screen.findByText(/Marc Prof/);
+  await fireEvent.press(screen.getByLabelText('Nouveau cours'));
+  expect(mockPush).toHaveBeenCalledWith('/courses/new');
 });
 
 it('shows prof, counts and prices', async () => {

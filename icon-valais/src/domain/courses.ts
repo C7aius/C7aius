@@ -92,6 +92,17 @@ export function zurichDayKey(iso: string): string {
   return `${p.y}-${pad(p.m)}-${pad(p.d)}`;
 }
 
+/** Date du jour `YYYY-MM-DD` en heure de Zurich. */
+export function zurichToday(now: Date = new Date()): string {
+  return zurichDayKey(now.toISOString());
+}
+
+/** Heure `HH:MM` (heure suisse). */
+export function zurichTimeKey(iso: string): string {
+  const p = zurichParts(new Date(iso));
+  return `${pad(p.h)}:${pad(p.mi)}`;
+}
+
 export function formatDayHeading(iso: string, lang: Lang): string {
   const p = zurichParts(new Date(iso));
   return `${WEEKDAYS[lang][p.wd]} ${pad(p.d)}.${pad(p.m)}`;

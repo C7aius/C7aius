@@ -79,6 +79,9 @@ export default function Admin() {
   const list = (
     <View>
       <Text style={styles.title}>{t('admin.title')}</Text>
+      <Pressable accessibilityRole="link" onPress={() => router.push('/admin/locations')}>
+        <Text style={styles.link}>{t('admin.locations')}</Text>
+      </Pressable>
       <Field label={t('common.search')} value={query} onChangeText={setQuery} />
       <View style={styles.chips}>
         {FILTERS.map((f) => (
@@ -128,6 +131,7 @@ const styles = StyleSheet.create({
   wideCol: { width: 380, borderRightWidth: 1, borderRightColor: colors.grey },
   wideDetail: { flex: 1 },
   title: { color: colors.orange, fontSize: 24, fontWeight: '700', marginBottom: 12 },
+  link: { color: colors.orange, textDecorationLine: 'underline', marginBottom: 12, fontSize: 16 },
   body: { color: colors.white, marginBottom: 8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 },
   item: { paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: colors.grey },

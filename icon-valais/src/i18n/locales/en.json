@@ -147,7 +147,18 @@
     "parentEmailNone": "No address",
     "parentEmailEdit": "New parent address",
     "parentEmailSave": "Save parent's email",
-    "parentEmailSaved": "Parent's email saved."
+    "parentEmailSaved": "Parent's email saved.",
+    "locations": "Locations",
+    "locationAdd": "Add a location",
+    "locationName": "Name",
+    "locationAddress": "Address",
+    "locationMaps": "Google Maps link (https://)",
+    "locationDefault": "Default location",
+    "locationDefaultBadge": "Default",
+    "locationArchivedBadge": "Archived",
+    "locationArchive": "Archive",
+    "locationRestore": "Restore",
+    "locationNone": "No location."
   },
   "tabs": {
     "home": "Home",
@@ -201,7 +212,12 @@
     "notBooked": "This profile is not booked for this class.",
     "invalidField": "A field is invalid.",
     "locationArchived": "This location is archived.",
-    "noDefaultLocation": "No default location is set."
+    "noDefaultLocation": "No default location is set.",
+    "defaultLocationArchived": "The default location cannot be archived.",
+    "defaultRequired": "A default location is required.",
+    "invalidProf": "This coach is not valid for this class.",
+    "missingField": "A required field is missing.",
+    "repeatBeforeStart": "The end date is before the first class."
   },
   "pending": {
     "profTitle": "Account awaiting approval",
@@ -268,6 +284,45 @@
     "addPresent": "Add a walk-in",
     "searchMember": "Search a member",
     "notFound": "Class not found.",
-    "close": "Close"
+    "close": "Close",
+    "newCourse": "New class",
+    "form": {
+      "newTitle": "New class",
+      "editTitle": "Edit class",
+      "sport": "Sport",
+      "level": "Audience",
+      "kind": "Type",
+      "kindNormal": "Class",
+      "date": "Date (YYYY-MM-DD)",
+      "startTime": "Start (HH:MM)",
+      "endTime": "End (HH:MM)",
+      "places": "Places",
+      "priceMember": "Member price (CHF)",
+      "priceNonMember": "Non-member price (CHF)",
+      "private": "Private class",
+      "prof": "Coach",
+      "recurring": "Recurring class",
+      "repeatUntil": "Repeat weekly until (YYYY-MM-DD)",
+      "repeatUntilFixed": "Every week until {{date}}",
+      "repeatMax": "Maximum: {{date}}",
+      "scope": "Apply to",
+      "create": "Create class",
+      "noLocation": "No location available.",
+      "forbidden": "You cannot edit this class.",
+      "err": {
+        "location": "Choose a location",
+        "date": "Invalid date (YYYY-MM-DD)",
+        "time": "Invalid time (HH:MM)",
+        "places": "Between 1 and 100 places",
+        "price": "Invalid price (0 or more)",
+        "endBeforeStart": "The end must be after the start",
+        "repeatRequired": "Enter the end date of the repetition",
+        "repeatBeforeStart": "The end date is before the first class",
+        "repeatTooFar": "End date too far away",
+        "nameTooLong": "60 characters maximum",
+        "addressTooLong": "200 characters maximum",
+        "mapsUrl": "The link must start with https://"
+      }
+    }
   }
 }

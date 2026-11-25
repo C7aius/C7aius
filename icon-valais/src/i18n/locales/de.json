@@ -147,7 +147,18 @@
     "parentEmailNone": "Keine Adresse",
     "parentEmailEdit": "Neue Adresse des Elternteils",
     "parentEmailSave": "E-Mail des Elternteils speichern",
-    "parentEmailSaved": "E-Mail des Elternteils gespeichert."
+    "parentEmailSaved": "E-Mail des Elternteils gespeichert.",
+    "locations": "Orte",
+    "locationAdd": "Ort hinzufügen",
+    "locationName": "Name",
+    "locationAddress": "Adresse",
+    "locationMaps": "Google-Maps-Link (https://)",
+    "locationDefault": "Standardort",
+    "locationDefaultBadge": "Standard",
+    "locationArchivedBadge": "Archiviert",
+    "locationArchive": "Archivieren",
+    "locationRestore": "Wiederherstellen",
+    "locationNone": "Kein Ort."
   },
   "tabs": {
     "home": "Start",
@@ -201,7 +212,12 @@
     "notBooked": "Dieses Profil ist nicht für den Kurs angemeldet.",
     "invalidField": "Ein Feld ist ungültig.",
     "locationArchived": "Dieser Ort ist archiviert.",
-    "noDefaultLocation": "Es ist kein Standardort festgelegt."
+    "noDefaultLocation": "Es ist kein Standardort festgelegt.",
+    "defaultLocationArchived": "Der Standardort kann nicht archiviert werden.",
+    "defaultRequired": "Ein Standardort ist erforderlich.",
+    "invalidProf": "Dieser Trainer ist für diesen Kurs nicht gültig.",
+    "missingField": "Ein Pflichtfeld fehlt.",
+    "repeatBeforeStart": "Das Enddatum liegt vor dem ersten Kurs."
   },
   "pending": {
     "profTitle": "Konto wartet auf Freigabe",
@@ -268,6 +284,45 @@
     "addPresent": "Anwesenden hinzufügen",
     "searchMember": "Mitglied suchen",
     "notFound": "Kurs nicht gefunden.",
-    "close": "Schliessen"
+    "close": "Schliessen",
+    "newCourse": "Neuer Kurs",
+    "form": {
+      "newTitle": "Neuer Kurs",
+      "editTitle": "Kurs bearbeiten",
+      "sport": "Sportart",
+      "level": "Zielgruppe",
+      "kind": "Art",
+      "kindNormal": "Kurs",
+      "date": "Datum (JJJJ-MM-TT)",
+      "startTime": "Beginn (HH:MM)",
+      "endTime": "Ende (HH:MM)",
+      "places": "Plätze",
+      "priceMember": "Preis Mitglied (CHF)",
+      "priceNonMember": "Preis Nichtmitglied (CHF)",
+      "private": "Privatkurs",
+      "prof": "Trainer",
+      "recurring": "Wiederkehrender Kurs",
+      "repeatUntil": "Jede Woche wiederholen bis (JJJJ-MM-TT)",
+      "repeatUntilFixed": "Jede Woche bis {{date}}",
+      "repeatMax": "Maximum: {{date}}",
+      "scope": "Anwenden auf",
+      "create": "Kurs erstellen",
+      "noLocation": "Kein Ort verfügbar.",
+      "forbidden": "Sie können diesen Kurs nicht bearbeiten.",
+      "err": {
+        "location": "Wählen Sie einen Ort",
+        "date": "Ungültiges Datum (JJJJ-MM-TT)",
+        "time": "Ungültige Uhrzeit (HH:MM)",
+        "places": "Zwischen 1 und 100 Plätzen",
+        "price": "Ungültiger Preis (0 oder mehr)",
+        "endBeforeStart": "Das Ende muss nach dem Beginn liegen",
+        "repeatRequired": "Geben Sie das Enddatum der Wiederholung an",
+        "repeatBeforeStart": "Das Enddatum liegt vor dem ersten Kurs",
+        "repeatTooFar": "Enddatum zu weit entfernt",
+        "nameTooLong": "Höchstens 60 Zeichen",
+        "addressTooLong": "Höchstens 200 Zeichen",
+        "mapsUrl": "Der Link muss mit https:// beginnen"
+      }
+    }
   }
 }

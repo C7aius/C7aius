@@ -78,6 +78,13 @@ beforeEach(async () => {
 const press = async (label: string) => fireEvent.press(screen.getByText(label));
 
 describe('account list', () => {
+  it('links to the locations screen', async () => {
+    await render(<AdminList />);
+    await waitFor(() => expect(screen.getByText('Chloe Test')).toBeTruthy());
+    await fireEvent.press(screen.getByText('Lieux'));
+    expect(mockPush).toHaveBeenCalledWith('/admin/locations');
+  });
+
   it('lists everyone, then only pending profs with the pending filter', async () => {
     await render(<AdminList />);
     await waitFor(() => expect(screen.getByText('Chloe Test')).toBeTruthy());
