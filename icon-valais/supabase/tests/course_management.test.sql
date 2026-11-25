@@ -324,7 +324,9 @@ update public.profiles set prof_status = 'valide' where id = pg_temp.k('p2');
 -- ---------------------------------------------------------------------------
 select pg_temp.login('a0000000-0000-0000-0000-00000000000a');
 select throws_ok($$ select * from public.notification_outbox $$, '42501', null, 'authenticated : notification_outbox illisible');
-select throws_ok($$ select * from public.bookings $$, '42501', null, 'authenticated : bookings sans grant (tâche 3)');
+select throws_ok(format($$ insert into public.bookings (course_id, profile_id, booked_by) values (%L, %L, %L) $$,
+                        pg_temp.r('vac'), pg_temp.k('a'), pg_temp.k('a')),
+                 '42501', null, 'authenticated : aucune écriture directe dans bookings');
 select throws_ok($$ select public.notify_profile(pg_temp.k('s1'), 'course_cancelled', null) $$, '42501', null,
                  'notify_profile non exposée');
 reset role;
