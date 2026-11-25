@@ -15,16 +15,23 @@
 --  * Doublons : l'index unique partiel bookings_one_active_idx (0005) +
 --    INSERT ... ON CONFLICT DO NOTHING ; sous concurrence, le second appel
 --    attend le premier puis relit la réservation existante.
---  * book / unbook / set_attendance prennent un verrou FOR SHARE sur le cours :
---    sérialisés avec cancel_course (FOR UPDATE), une réservation est soit
---    refusée (cours annulé), soit vue et notifiée par cancel_course.
+--  * book_course prend un verrou FOR SHARE sur le cours : sérialisé avec
+--    cancel_course (FOR UPDATE), une réservation est soit refusée (cours
+--    annulé), soit vue et notifiée par cancel_course. unbook_course et
+--    set_attendance prennent FOR UPDATE : sérialisés entre eux, une ligne
+--    d'appel ne peut pas survivre à une désinscription concurrente.
+--  * bookings.booked_by devient nullable, on delete set null : supprimer le
+--    profil d'un prof ou d'un parent qui a inscrit quelqu'un d'autre ne
+--    bloque pas (Edge Function delete-account) ; la réservation reste.
+--  * Présent non inscrit : le profil doit être actif (inactive_profile).
 --  * « Enfant » : profil avec parent_profile_id = l'appelant et sans login.
 --  * Invariant : toute ligne d'appel a une réservation active (set_attendance
 --    crée la réservation d'un présent non inscrit ; unbook_course retire la
 --    ligne d'appel).
 --
 -- HINTs stables (lus par l'application) :
---   course_closed, too_early, not_booked, missing_field, course_cancelled.
+--   course_closed, too_early, not_booked, missing_field, course_cancelled,
+--   inactive_profile.
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -38,6 +45,12 @@ create table public.attendance (
   marked_at  timestamptz not null default now(),
   primary key (course_id, profile_id)
 );
+
+-- booked_by : nullable, on delete set null (suppression de compte)
+alter table public.bookings alter column booked_by drop not null;
+alter table public.bookings drop constraint bookings_booked_by_fkey;
+alter table public.bookings add constraint bookings_booked_by_fkey
+  foreign key (booked_by) references public.profiles (id) on delete set null;
 
 create index attendance_profile_id_idx on public.attendance (profile_id);
 create index attendance_marked_by_idx on public.attendance (marked_by);
@@ -170,7 +183,7 @@ begin
     raise exception 'unbook_course: only for yourself or your children' using errcode = '42501';
   end if;
 
-  select * into v_c from public.courses where id = p_course for share;
+  select * into v_c from public.courses where id = p_course for update;
   if v_c.id is null then
     raise exception 'unbook_course: course not found' using errcode = 'P0002';
   end if;
@@ -217,8 +230,9 @@ $$;
 -- set_attendance(p_course, p_profile, p_present) : prof assigné ou admin, à
 -- partir de starts_at - 30 min (avant → 22023 too_early), sans limite de fin
 -- (corrections après le cours). Cours annulé → course_cancelled. Présent non
--- inscrit : la réservation est créée (booked_by = l'appelant) ; absent non
--- inscrit → 22023 not_booked. p_present null → 22023 missing_field.
+-- inscrit : la réservation est créée (booked_by = l'appelant) si son compte
+-- est actif (sinon 22023 inactive_profile) ; absent non inscrit → 22023
+-- not_booked. p_present null → 22023 missing_field.
 -- ---------------------------------------------------------------------------
 create function public.set_attendance(p_course uuid, p_profile uuid, p_present bool) returns void
 language plpgsql security definer set search_path = '' as $$
@@ -234,7 +248,7 @@ begin
       using errcode = '22023', hint = 'missing_field';
   end if;
 
-  select * into v_c from public.courses where id = p_course for share;
+  select * into v_c from public.courses where id = p_course for update;
   if v_c.id is null then
     raise exception 'set_attendance: course not found' using errcode = 'P0002';
   end if;
@@ -258,6 +272,11 @@ begin
     if not p_present then
       raise exception 'set_attendance: not booked'
         using errcode = '22023', hint = 'not_booked';
+    end if;
+    if not exists (select 1 from public.profiles p
+                    where p.id = p_profile and public.is_account_active(p)) then
+      raise exception 'set_attendance: inactive profile cannot be added'
+        using errcode = '22023', hint = 'inactive_profile';
     end if;
     insert into public.bookings (course_id, profile_id, booked_by)
     values (p_course, p_profile, v_me)

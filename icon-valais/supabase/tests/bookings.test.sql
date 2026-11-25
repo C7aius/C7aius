@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(96);
+select plan(108);
 
 create temp table ids (k text primary key, v uuid);
 grant all on ids to authenticated;
@@ -78,6 +78,7 @@ select pg_temp.signup('9a000000-0000-0000-0000-00000000009a', 'bpa@t.ch', '{"fir
 select pg_temp.signup('9b000000-0000-0000-0000-00000000009b', 'bpb@t.ch', '{"first_name":"Pb","last_name":"Other","age":44,"sports":["jjb"]}');
 select pg_temp.signup('e0000000-0000-0000-0000-00000000000e', 'bmi@t.ch', '{"first_name":"Min","last_name":"Or","age":13,"sports":["jjb"],"parent_email":"pp@t.ch"}');
 select pg_temp.signup('bf000000-0000-0000-0000-0000000000bf', 'bpr@t.ch', '{"first_name":"Ref","last_name":"Used","age":30,"sports":["jjb"],"coach_years":1,"role":"prof"}');
+select pg_temp.signup('bd000000-0000-0000-0000-0000000000bd', 'bpq@t.ch', '{"first_name":"Pend","last_name":"Ing","age":30,"sports":["jjb"],"coach_years":1,"role":"prof"}');
 update public.profiles set role = 'admin' where auth_user_id = 'a0000000-0000-0000-0000-00000000000a';
 update public.profiles set prof_status = 'valide'
  where auth_user_id in ('b1000000-0000-0000-0000-0000000000b1', 'b2000000-0000-0000-0000-0000000000b2');
@@ -90,7 +91,9 @@ insert into ids values
   ('s1', pg_temp.pid('51000000-0000-0000-0000-000000000051')),
   ('s2', pg_temp.pid('52000000-0000-0000-0000-000000000052')),
   ('pa', pg_temp.pid('9a000000-0000-0000-0000-00000000009a')),
-  ('pb', pg_temp.pid('9b000000-0000-0000-0000-00000000009b'));
+  ('pb', pg_temp.pid('9b000000-0000-0000-0000-00000000009b')),
+  ('mi', pg_temp.pid('e0000000-0000-0000-0000-00000000000e')),
+  ('pq', pg_temp.pid('bd000000-0000-0000-0000-0000000000bd'));
 insert into public.profiles (parent_profile_id, first_name, last_name, age, sports, bjj_belt)
 values (pg_temp.k('pa'), 'Kid', 'Rent', 9, '{jjb}', 'grise'),
        (pg_temp.k('pb'), 'Kid', 'Other', 8, '{jjb}', null);
@@ -106,7 +109,11 @@ insert into ids values
   ('canc',    pg_temp.mk(pg_temp.k('p1'), interval '1 day', 'annule')),
   ('started', pg_temp.mk(pg_temp.k('p1'), interval '-10 minutes')),
   ('soon',    pg_temp.mk(pg_temp.k('p1'), interval '1 hour')),
-  ('near',    pg_temp.mk(pg_temp.k('p1'), interval '20 minutes'));
+  ('near',    pg_temp.mk(pg_temp.k('p1'), interval '20 minutes')),
+  ('priv',    pg_temp.mk(pg_temp.k('p1'), interval '2 days')),
+  ('vac',     pg_temp.mk(null, interval '2 days')),
+  ('om',      pg_temp.mk(null, interval '2 days', 'open_mat'));
+update public.courses set is_private = true where id = pg_temp.k('priv');
 
 select pg_temp.book(pg_temp.k('started'), pg_temp.k('s1'), pg_temp.k('s1'));
 select pg_temp.book(pg_temp.k('started'), pg_temp.k('ch'), pg_temp.k('pa'));
@@ -208,6 +215,15 @@ select isnt(public.book_course(pg_temp.k('c1'), pg_temp.k('ch')), (select v from
 reset role;
 select is(pg_temp.active(pg_temp.k('c1'), pg_temp.k('ch')), 1, 'enfant : une seule réservation active');
 
+-- décisions : cours privé, créneau vacant et open mat se réservent
+select pg_temp.login('9a000000-0000-0000-0000-00000000009a');
+select lives_ok(format('select public.book_course(%L)', pg_temp.k('priv')), 'cours privé : réservation possible');
+select lives_ok(format('select public.book_course(%L)', pg_temp.k('vac')), 'créneau vacant : réservation possible');
+select lives_ok(format('select public.book_course(%L)', pg_temp.k('om')), 'open mat : réservation possible');
+reset role;
+select is(pg_temp.active(pg_temp.k('priv'), pg_temp.k('pa')) + pg_temp.active(pg_temp.k('vac'), pg_temp.k('pa'))
+          + pg_temp.active(pg_temp.k('om'), pg_temp.k('pa')), 3, 'trois réservations actives');
+
 -- ---------------------------------------------------------------------------
 -- course_booking_counts
 -- ---------------------------------------------------------------------------
@@ -262,7 +278,7 @@ select pg_temp.login('b2000000-0000-0000-0000-0000000000b2');
 select is((select count(*)::int from public.bookings), 0, 'prof non assigné : ne voit rien');
 reset role;
 select pg_temp.login('a0000000-0000-0000-0000-00000000000a');
-select is((select count(*)::int from public.bookings), 6, 'admin : toutes les réservations');
+select is((select count(*)::int from public.bookings), 9, 'admin : toutes les réservations');
 reset role;
 select pg_temp.login('e0000000-0000-0000-0000-00000000000e');
 select is((select count(*)::int from public.bookings), 0, 'compte inactif : rien');
@@ -318,6 +334,12 @@ select lives_ok(format('select public.set_attendance(%L, %L, true)', pg_temp.k('
                 'ajout d''un présent non inscrit');
 select is(pg_temp.hint_of(format('select public.set_attendance(%L, %L, false)', pg_temp.k('started'), pg_temp.k('pb'))),
           'not_booked', 'absent non inscrit → not_booked');
+select is(pg_temp.hint_of(format('select public.set_attendance(%L, %L, true)', pg_temp.k('started'), pg_temp.k('mi'))),
+          'inactive_profile', 'présent non inscrit : mineur sans consentement → inactive_profile');
+select is(pg_temp.hint_of(format('select public.set_attendance(%L, %L, true)', pg_temp.k('started'), pg_temp.k('pq'))),
+          'inactive_profile', 'présent non inscrit : prof en attente → inactive_profile');
+select throws_ok(format('select public.set_attendance(%L, %L, true)', pg_temp.k('started'), pg_temp.k('pq')),
+                 '22023', null, 'inactive_profile : 22023');
 select is(pg_temp.hint_of(format('select public.set_attendance(%L, %L, null)', pg_temp.k('started'), pg_temp.k('s1'))),
           'missing_field', 'p_present null → missing_field');
 select throws_ok(format('select public.set_attendance(%L, %L, true)', pg_temp.k('started'), gen_random_uuid()),
@@ -397,6 +419,24 @@ select throws_ok($$ select public.book_course(gen_random_uuid()) $$, '42501', nu
 select throws_ok($$ select * from public.course_participants(gen_random_uuid()) $$, '42501', null,
                  'anon : course_participants refusé');
 reset role;
+
+-- ---------------------------------------------------------------------------
+-- suppression du profil d'un prof qui a inscrit un présent non inscrit
+-- ---------------------------------------------------------------------------
+select is((select count(*)::int from public.bookings where profile_id in (pg_temp.k('mi'), pg_temp.k('pq'))),
+          0, 'inactive_profile : aucune réservation créée');
+select is((select array_agg(c.conname::text || ':' || c.confdeltype::text order by c.conname)
+             from pg_constraint c
+            where c.conrelid in ('public.bookings'::regclass, 'public.attendance'::regclass)
+              and c.conname in ('bookings_booked_by_fkey', 'attendance_marked_by_fkey')),
+          array['attendance_marked_by_fkey:n', 'bookings_booked_by_fkey:n'], 'booked_by et marked_by : on delete set null');
+select lives_ok($$ delete from public.profiles where id = pg_temp.k('p1') $$, 'suppression du profil du prof');
+select is((select count(*)::int || ' ' || bool_and(booked_by is null)::text from public.bookings
+            where course_id = pg_temp.k('started') and profile_id = pg_temp.k('s2') and cancelled_at is null),
+          '1 true', 'la réservation reste, booked_by null');
+select is((select marked_by from public.attendance
+            where course_id = pg_temp.k('started') and profile_id = pg_temp.k('s2')),
+          null, 'attendance.marked_by null');
 
 select * from finish();
 rollback;

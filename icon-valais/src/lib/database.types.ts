@@ -90,7 +90,7 @@ export type Database = {
       };
       bookings: {
         Row: {
-          booked_by: string;
+          booked_by: string | null;
           cancelled_at: string | null;
           course_id: string;
           created_at: string;
@@ -99,7 +99,7 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
-          booked_by: string;
+          booked_by?: string | null;
           cancelled_at?: string | null;
           course_id: string;
           created_at?: string;
@@ -107,7 +107,7 @@ export type Database = {
           profile_id: string;
         };
         Update: {
-          booked_by?: string;
+          booked_by?: string | null;
           cancelled_at?: string | null;
           course_id?: string;
           created_at?: string;
