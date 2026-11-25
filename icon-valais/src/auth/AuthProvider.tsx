@@ -97,14 +97,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [savedLang, userId]);
 
-  // Jeton de notifications : une fois par utilisateur et par session d'app, après un profil actif frais.
+  // Jeton de notifications : une fois par utilisateur et par session d'app, dès qu'un profil frais est
+  // chargé, actif ou non (register_push_token l'accepte) : un prof en attente doit recevoir prof_validated.
   const pushUser = useRef<string | null>(null);
-  const activeNow = fresh && loaded.isActive;
+  const hasProfile = fresh && loaded.profile !== null;
   useEffect(() => {
-    if (!activeNow || !userId || pushUser.current === userId) return;
+    if (!hasProfile || !userId || pushUser.current === userId) return;
     pushUser.current = userId;
     registerForPush().catch(() => console.warn('push registration failed'));
-  }, [activeNow, userId]);
+  }, [hasProfile, userId]);
 
   const value = useMemo<AuthState>(
     () => ({

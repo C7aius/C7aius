@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { BeltEditor } from '@/src/components/BeltEditor';
 import { Button, Chip, ErrorText, Field } from '@/src/components/ui';
-import { rpcErrorKey } from '@/src/domain/adminErrors';
+import { courseRpcErrorKey } from '@/src/domain/adminErrors';
 import type { Belt } from '@/src/domain/types';
 import { setAttendance } from '@/src/lib/coursesApi';
 import { supabase } from '@/src/lib/supabase';
@@ -33,7 +33,7 @@ export function ParticipantsList({ courseId, selfId }: { courseId: string; selfI
   const load = useCallback(async () => {
     try {
       const { data, error: e } = await supabase.rpc('course_participants', { p_course: courseId });
-      if (e) setError(rpcErrorKey(e));
+      if (e) setError(courseRpcErrorKey(e));
       else setRows((data ?? []) as Participant[]);
     } catch {
       setError('errors.network');

@@ -1,4 +1,4 @@
-import { rpcErrorKey } from '@/src/domain/adminErrors';
+import { courseRpcErrorKey } from '@/src/domain/adminErrors';
 import type { CourseRow } from '@/src/domain/courses';
 import { supabase } from '@/src/lib/supabase';
 
@@ -77,7 +77,7 @@ async function assemble(courses: RawCourse[], profileIds?: string[]): Promise<Co
 async function call(fn: 'book_course' | 'unbook_course', courseId: string, profileId?: string): Promise<string | null> {
   try {
     const { error } = await supabase.rpc(fn, { p_course: courseId, ...(profileId ? { p_profile: profileId } : {}) });
-    return error ? rpcErrorKey(error) : null;
+    return error ? courseRpcErrorKey(error) : null;
   } catch {
     return 'errors.network';
   }
@@ -89,7 +89,7 @@ export const unbookCourse = (courseId: string, profileId?: string) => call('unbo
 async function rpcKey(run: () => PromiseLike<{ error: { code?: string; hint?: string | null } | null }>): Promise<string | null> {
   try {
     const { error } = await run();
-    return error ? rpcErrorKey(error) : null;
+    return error ? courseRpcErrorKey(error) : null;
   } catch {
     return 'errors.network';
   }

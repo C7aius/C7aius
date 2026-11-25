@@ -60,3 +60,12 @@ export function formatDate(iso: string): string {
   const [y, m, d] = iso.split('-');
   return `${d}.${m}.${y}`;
 }
+
+/**
+ * Erreur d'une RPC de cours (création, modification, réservation, appel…). Comme rpcErrorKey,
+ * sauf qu'un 23514 sans HINT (contrainte CHECK) n'est jamais une erreur de ceinture ici.
+ */
+export function courseRpcErrorKey(error: { code?: string; hint?: string | null } | null | undefined): string {
+  if (error?.code === '23514' && !error.hint) return 'errors.invalidField';
+  return rpcErrorKey(error);
+}

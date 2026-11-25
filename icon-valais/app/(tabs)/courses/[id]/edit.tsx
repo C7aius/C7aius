@@ -76,7 +76,7 @@ export default function EditCourse() {
           priceNonMember: course.price_non_member,
         }}
         onSubmit={async (values, scope) => {
-          const key = await updateCourse(course.id, toUpdateCoursePayload(values), scope);
+          const key = await updateCourse(course.id, toUpdateCoursePayload(values, course.location_id), scope);
           if (!key) router.back();
           return key;
         }}

@@ -57,7 +57,7 @@ Deux tâches `pg_cron` sont créées par la migration `0006_notifications.sql` :
 
 | Tâche | Fréquence | Rôle |
 | --- | --- | --- |
-| `process-course-schedule` | toutes les 5 minutes | `process_course_schedule()` : cours sans prof dans les 24 h → notification `slot_vacant` aux profs validés et aux admins (une seule fois par cours) ; cours sans prof commencé → Open Mat |
+| `process-course-schedule` | toutes les 5 minutes | `process_course_schedule()` : cours sans prof dans les 24 h → notification `slot_vacant` aux profs validés et aux admins, aux admins seulement pour un cours privé (une seule fois par cours) ; cours sans prof commencé → Open Mat |
 | `send-push` | chaque minute | s'il reste des notifications en attente, appelle `POST <functions_url>/send-push` via `pg_net` |
 
 `send-push` n'accepte que la clé `service_role` (`Authorization: Bearer <clé>`). La tâche lit l'URL et
@@ -162,6 +162,22 @@ d'e-mails d'authentification est atteint).
 - Une route de `Tabs` masquée par `href: null` est redirigée vers `/` par expo-router : le dossier
   `courses` (détail, création, modification) n'est donc pas masqué mais sans bouton d'onglet
   (`tabBarItemStyle: { display: 'none' }`).
+
+## Notes pour les plans suivants
+
+- **Plan 3** : une réservation (`bookings`) d'un cours annulé reste active (`cancelled_at` null) ; les
+  écrans « mes réservations » et les compteurs doivent joindre `courses.status` et ignorer les cours
+  `annule`.
+- **Plan 4** : les classements ne doivent compter que la présence (`attendance`) des cours non annulés
+  (`cancel_course` supprime l'appel des cours qu'il annule, mais filtrer quand même sur `courses.status`).
+- **Plan 5** (application native), à vérifier :
+  - lire les reçus Expo (`getReceipts`) pour supprimer les jetons invalides signalés après l'envoi ;
+  - supprimer le jeton push de l'appareil à la déconnexion (`push_tokens`, policy `delete` propre) ;
+  - démarrage à froid depuis une notification : différer l'ouverture de la route jusqu'à ce que la
+    session et le profil soient chargés (`AuthGate`) ;
+  - onglet Admin (`href: null` pour un non-admin) : vérifier le comportement au rechargement de la page
+    web sur une route admin ;
+  - renseigner `extra.eas.projectId` (EAS) : sans lui, `registerForPush` renvoie `unsupported`.
 
 ## Mot de passe oublié
 

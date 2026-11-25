@@ -54,11 +54,31 @@ export async function registerForPush(): Promise<PushResult> {
 }
 
 /**
+ * Affiche les notifications reçues quand l'app est au premier plan (bannière et centre de
+ * notifications, sans son ni badge). Sans ce gestionnaire, expo-notifications les ignore.
+ * Sans effet sur le web.
+ */
+export function configureForegroundNotifications(): void {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') return;
+  const { Notifications } = loadNative();
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+    }),
+  });
+}
+
+/**
  * Ouvre le cours d'une notification touchée (app au premier plan/arrière-plan, ou lancée depuis elle).
+ * Configure aussi l'affichage au premier plan (appelée au démarrage par app/_layout.tsx).
  * Retourne la fonction de désabonnement. Sans effet sur le web.
  */
 export function listenForNotificationTaps(open: (route: string) => void): () => void {
   if (Platform.OS !== 'ios' && Platform.OS !== 'android') return () => undefined;
+  configureForegroundNotifications();
   const { Notifications } = loadNative();
   let cancelled = false;
   const handle = (response: { notification: { request: { content: { data?: unknown } } } } | null) => {

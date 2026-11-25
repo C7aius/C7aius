@@ -161,13 +161,44 @@ describe('edit course', () => {
     await waitFor(() => expect(mockRpc).toHaveBeenCalled());
     expect(mockRpc).toHaveBeenCalledWith('update_course', {
       p_course: 'c1',
-      p: expect.objectContaining({ places: 12, location_id: 'l1', sport: 'jjb', start_time: '18:30', end_time: '20:00' }),
+      p: expect.objectContaining({ places: 12, sport: 'jjb', start_time: '18:30', end_time: '20:00' }),
       p_scope: 'following',
     });
     const p = mockRpc.mock.calls[0][1].p;
+    // lieu inchangé : location_id non envoyé
     expect(Object.keys(p).sort()).toEqual(
-      ['end_time', 'kind', 'level', 'location_id', 'places', 'price_member', 'price_non_member', 'sport', 'start_time'],
+      ['end_time', 'kind', 'level', 'places', 'price_member', 'price_non_member', 'sport', 'start_time'],
     );
+  });
+
+  it('keeps an archived current location: shown, and location_id not sent when unchanged', async () => {
+    mockTables.courses = [course({ location_id: 'l3' })];
+    await render(<EditCourse />);
+    expect(await screen.findByText('Vieux dojo')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Places'), '15');
+    await fireEvent.press(screen.getByText('Enregistrer'));
+    await waitFor(() => expect(mockRpc).toHaveBeenCalled());
+    const p = mockRpc.mock.calls[0][1].p;
+    expect(p).not.toHaveProperty('location_id');
+    expect(p.places).toBe(15);
+  });
+
+  it('sends location_id when the location changes', async () => {
+    mockTables.courses = [course({ location_id: 'l3' })];
+    await render(<EditCourse />);
+    await fireEvent.press(await screen.findByText('Sion'));
+    await fireEvent.press(screen.getByText('Enregistrer'));
+    await waitFor(() => expect(mockRpc).toHaveBeenCalled());
+    expect(mockRpc.mock.calls[0][1].p.location_id).toBe('l2');
+  });
+
+  it('a bare 23514 from update_course is shown as an invalid field, not a belt error', async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { code: '23514' } });
+    await render(<EditCourse />);
+    await fireEvent.changeText(await screen.findByLabelText('Places'), '15');
+    await fireEvent.press(screen.getByText('Enregistrer'));
+    expect(await screen.findByText("Un champ n'est pas valide.")).toBeTruthy();
+    expect(screen.queryByText("Cette ceinture n'est pas autorisée pour cet âge.")).toBeNull();
   });
 
   it('refuses a prof who is not the creator', async () => {

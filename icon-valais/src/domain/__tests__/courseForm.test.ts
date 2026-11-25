@@ -1,4 +1,11 @@
-import { courseFormSchema, maxRepeatUntil, toCreateCoursePayload, validateCourseForm, type CourseFormValues } from '../courseForm';
+import {
+  courseFormSchema,
+  maxRepeatUntil,
+  toCreateCoursePayload,
+  toUpdateCoursePayload,
+  validateCourseForm,
+  type CourseFormValues,
+} from '../courseForm';
 import { zurichToday } from '../courses';
 
 const base: CourseFormValues = {
@@ -99,5 +106,19 @@ describe('zurichToday', () => {
   it('uses the Zurich calendar day', () => {
     expect(zurichToday(new Date('2026-03-01T23:30:00Z'))).toBe('2026-03-02');
     expect(zurichToday(new Date('2026-07-01T21:59:00Z'))).toBe('2026-07-01');
+  });
+});
+
+describe('toUpdateCoursePayload', () => {
+  it('omits location_id when the location is unchanged (it may have been archived since)', () => {
+    const p = toUpdateCoursePayload(base, 'l1');
+    expect(p).not.toHaveProperty('location_id');
+    expect(p).toMatchObject({ sport: 'jjb', start_time: '18:30', end_time: '20:00', places: 20 });
+  });
+  it('sends location_id when it changes', () => {
+    expect(toUpdateCoursePayload({ ...base, locationId: 'l2' }, 'l1')).toMatchObject({ location_id: 'l2' });
+  });
+  it('sends location_id without a current location', () => {
+    expect(toUpdateCoursePayload(base)).toMatchObject({ location_id: 'l1' });
   });
 });

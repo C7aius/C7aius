@@ -113,19 +113,24 @@ export function toCreateCoursePayload(v: CourseFormValues): { p: Record<string, 
   return { p, p_repeat_until: v.recurring && v.repeatUntil ? v.repeatUntil : null };
 }
 
-/** Clés attendues par update_course (date, privé, prof et récurrence ne sont pas modifiables). */
-export function toUpdateCoursePayload(v: CourseFormValues): Record<string, unknown> {
-  return {
+/**
+ * Clés attendues par update_course (date, privé, prof et récurrence ne sont pas modifiables).
+ * `location_id` n'est envoyé que s'il change par rapport à `currentLocationId` : le lieu actuel
+ * peut avoir été archivé depuis (update_course refuse un lieu archivé).
+ */
+export function toUpdateCoursePayload(v: CourseFormValues, currentLocationId?: string): Record<string, unknown> {
+  const p: Record<string, unknown> = {
     sport: v.sport,
     level: v.level,
     kind: v.kind,
-    location_id: v.locationId,
     start_time: v.startTime,
     end_time: v.endTime,
     places: v.places,
     price_member: v.priceMember,
     price_non_member: v.priceNonMember,
   };
+  if (v.locationId !== currentLocationId) p.location_id = v.locationId;
+  return p;
 }
 
 export type LocationFormValues = { name: string; address: string; mapsUrl: string };

@@ -42,6 +42,9 @@ jest.mock('@/src/lib/supabase', () => ({
   },
 }));
 
+const mockRegisterForPush = jest.fn();
+jest.mock('@/src/lib/push', () => ({ registerForPush: () => mockRegisterForPush() }));
+
 const session = { user: { id: 'u1' } };
 const targets = () => mockReplace.mock.calls.map((c) => c[0]);
 
@@ -55,6 +58,7 @@ beforeEach(async () => {
   mockProfile = null;
   mockActive = true;
   mockGate = Promise.resolve();
+  mockRegisterForPush.mockResolvedValue('registered');
 });
 
 const mount = () =>
@@ -121,5 +125,40 @@ describe('AuthGate', () => {
     mockProfile = { role: 'eleve', language: 'de' };
     await mount();
     await waitFor(() => expect(i18n.language).toBe('de'));
+  });
+});
+
+describe('push registration', () => {
+  it('pending prof registers (inactive account, to receive prof_validated)', async () => {
+    mockSession = session;
+    mockProfile = { role: 'prof', prof_status: 'en_attente' };
+    mockActive = false;
+    await mount();
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/pending'));
+    await waitFor(() => expect(mockRegisterForPush).toHaveBeenCalledTimes(1));
+  });
+
+  it('active user registers once', async () => {
+    mockSession = session;
+    mockProfile = { role: 'eleve', language: 'fr' };
+    await mount();
+    await waitFor(() => expect(mockRegisterForPush).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      authCb?.('TOKEN_REFRESHED', { user: { id: 'u1' } });
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mockRegisterForPush).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not register without a session or a profile', async () => {
+    await mount();
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/login'));
+    mockSession = session;
+    mockProfile = null;
+    await act(async () => {
+      authCb?.('SIGNED_IN', session);
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mockRegisterForPush).not.toHaveBeenCalled();
   });
 });

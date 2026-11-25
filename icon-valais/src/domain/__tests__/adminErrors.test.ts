@@ -1,4 +1,4 @@
-import { rpcErrorKey } from '../adminErrors';
+import { courseRpcErrorKey, rpcErrorKey } from '../adminErrors';
 
 describe('rpcErrorKey', () => {
   it('maps database hints to specific messages', () => {
@@ -17,5 +17,21 @@ describe('rpcErrorKey', () => {
     expect(rpcErrorKey({ code: '42501', hint: null })).toBe('errors.notAllowed');
     expect(rpcErrorKey({ code: 'P0002' })).toBe('errors.notFound');
     expect(rpcErrorKey(null)).toBe('errors.generic');
+  });
+});
+
+describe('courseRpcErrorKey', () => {
+  it('a bare 23514 from a course RPC is an invalid field, not a belt error', () => {
+    expect(courseRpcErrorKey({ code: '23514' })).toBe('errors.invalidField');
+    expect(courseRpcErrorKey({ code: '23514', hint: null })).toBe('errors.invalidField');
+  });
+  it('keeps hints and other codes', () => {
+    expect(courseRpcErrorKey({ code: '22023', hint: 'invalid_field' })).toBe('errors.invalidField');
+    expect(courseRpcErrorKey({ code: '22023', hint: 'location_archived' })).toBe('errors.locationArchived');
+    expect(courseRpcErrorKey({ code: '42501' })).toBe('errors.notAllowed');
+    expect(courseRpcErrorKey(null)).toBe('errors.generic');
+  });
+  it('rpcErrorKey keeps 23514 → beltAge for belt contexts', () => {
+    expect(rpcErrorKey({ code: '23514' })).toBe('errors.beltAge');
   });
 });

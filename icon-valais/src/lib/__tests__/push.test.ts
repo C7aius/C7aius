@@ -25,16 +25,20 @@ jest.mock('expo-constants', () => ({
 const mockGetPerms = jest.fn();
 const mockRequestPerms = jest.fn();
 const mockGetToken = jest.fn();
+const mockSetHandler = jest.fn();
+const mockRemove = jest.fn();
 jest.mock('expo-notifications', () => ({
+  setNotificationHandler: (h: unknown) => mockSetHandler(h),
+  addNotificationResponseReceivedListener: () => ({ remove: mockRemove }),
+  getLastNotificationResponseAsync: () => Promise.resolve(null),
   getPermissionsAsync: () => mockGetPerms(),
   requestPermissionsAsync: () => mockRequestPerms(),
   getExpoPushTokenAsync: (o: unknown) => mockGetToken(o),
   setNotificationChannelAsync: jest.fn().mockResolvedValue(undefined),
-  setNotificationHandler: jest.fn(),
   AndroidImportance: { DEFAULT: 3 },
 }));
 
-import { registerForPush, routeForNotification } from '../push';
+import { configureForegroundNotifications, listenForNotificationTaps, registerForPush, routeForNotification } from '../push';
 
 const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { value: os, configurable: true });
 
@@ -102,5 +106,34 @@ describe('routeForNotification', () => {
   });
   it.each([null, undefined, 'x', 3, {}, { courseId: 5 }, { courseId: '' }, { courseId: 'a/b' }])('invalide %p', (d) => {
     expect(routeForNotification(d)).toBeNull();
+  });
+});
+
+describe('foreground notifications', () => {
+  it('native: setNotificationHandler shows banner and list, without sound', async () => {
+    const unsubscribe = listenForNotificationTaps(jest.fn());
+    expect(mockSetHandler).toHaveBeenCalledTimes(1);
+    const handler = mockSetHandler.mock.calls[0][0] as { handleNotification: () => Promise<Record<string, boolean>> };
+    await expect(handler.handleNotification()).resolves.toEqual({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+    });
+    unsubscribe();
+    expect(mockRemove).toHaveBeenCalled();
+  });
+
+  it('android: handler set too', () => {
+    setOS('android');
+    configureForegroundNotifications();
+    expect(mockSetHandler).toHaveBeenCalledTimes(1);
+  });
+
+  it('web: no handler, no native module', () => {
+    setOS('web');
+    configureForegroundNotifications();
+    listenForNotificationTaps(jest.fn())();
+    expect(mockSetHandler).not.toHaveBeenCalled();
   });
 });
