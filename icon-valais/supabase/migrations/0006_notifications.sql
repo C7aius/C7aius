@@ -35,7 +35,7 @@ grant usage, select on sequence public.notification_outbox_id_seq to service_rol
 -- ---------------------------------------------------------------------------
 -- notify_profile(p_profile, p_kind, p_course) : écrit une ligne d'outbox pour
 -- p_profile, ou pour son parent si p_profile n'a pas de login. Profil
--- inconnu : rien.
+-- inconnu, ou sans login ni parent : rien.
 -- ---------------------------------------------------------------------------
 create function public.notify_profile(p_profile uuid, p_kind text, p_course uuid) returns void
 language plpgsql security definer set search_path = '' as $$
@@ -47,7 +47,10 @@ begin
     return;
   end if;
 
-  if v_p.auth_user_id is null and v_p.parent_profile_id is not null then
+  if v_p.auth_user_id is null then
+    if v_p.parent_profile_id is null then
+      return;  -- ni login ni parent : personne à notifier
+    end if;
     insert into public.notification_outbox (profile_id, kind, course_id, payload)
     values (v_p.parent_profile_id, p_kind, p_course, jsonb_build_object('child_profile_id', v_p.id));
   else

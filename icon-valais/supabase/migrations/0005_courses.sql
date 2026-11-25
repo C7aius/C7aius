@@ -531,8 +531,8 @@ $$;
 -- la portée non encore annulés et écrit une notification course_cancelled
 -- par inscription active de chaque cours annulé (notify_profile : un enfant
 -- sans login → son parent). Les inscriptions elles-mêmes ne sont pas
--- modifiées. Cours ciblé commencé → course_started. Idempotent : retourne
--- le nombre de cours annulés par cet appel.
+-- modifiées. Cours ciblé annulé → course_cancelled ; commencé →
+-- course_started. Retourne le nombre de cours annulés par cet appel.
 -- ---------------------------------------------------------------------------
 create function public.cancel_course(p_course uuid, p_scope text) returns int
 language plpgsql security definer set search_path = '' as $$
@@ -558,6 +558,10 @@ begin
   if not v_admin and (v_c.created_by is distinct from v_me or v_c.is_private) then
     raise exception 'cancel_course: only the creator of a non-private course or an admin'
       using errcode = '42501';
+  end if;
+  if v_c.status = 'annule' then
+    raise exception 'cancel_course: course is already cancelled'
+      using errcode = '22023', hint = 'course_cancelled';
   end if;
   if v_c.starts_at <= now() then
     raise exception 'cancel_course: course has already started'
@@ -588,19 +592,30 @@ $$;
 -- ---------------------------------------------------------------------------
 -- assign_prof(p_course, p_prof) : admin seulement. p_prof null libère le
 -- créneau. La cible doit être un prof validé ou un admin (invalid_prof).
+-- Cours annulé → course_cancelled ; commencé → course_started.
 -- Remet vacancy_notified_at à null ; un open mat qui reçoit un prof repasse
 -- à prevu (comme take_slot).
 -- ---------------------------------------------------------------------------
 create function public.assign_prof(p_course uuid, p_prof uuid) returns void
 language plpgsql security definer set search_path = '' as $$
+declare
+  v_c public.courses;
 begin
   if not public.is_admin() then
     raise exception 'assign_prof: admin required' using errcode = '42501';
   end if;
 
-  perform 1 from public.courses where id = p_course for update;
-  if not found then
+  select * into v_c from public.courses where id = p_course for update;
+  if v_c.id is null then
     raise exception 'assign_prof: course not found' using errcode = 'P0002';
+  end if;
+  if v_c.status = 'annule' then
+    raise exception 'assign_prof: course is cancelled'
+      using errcode = '22023', hint = 'course_cancelled';
+  end if;
+  if v_c.starts_at <= now() then
+    raise exception 'assign_prof: course has already started'
+      using errcode = '22023', hint = 'course_started';
   end if;
 
   if p_prof is not null and not exists (
@@ -673,8 +688,9 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- leave_slot(p_course) : le prof assigné quitte un cours pas commencé ;
--- prof_id et vacancy_notified_at repassent à null.
+-- leave_slot(p_course) : le prof assigné (compte actif) quitte un cours non
+-- privé pas commencé ; prof_id et vacancy_notified_at repassent à null. Le
+-- prof d'un cours privé n'est géré que par l'admin (assign_prof).
 -- ---------------------------------------------------------------------------
 create function public.leave_slot(p_course uuid) returns void
 language plpgsql security definer set search_path = '' as $$
@@ -682,8 +698,8 @@ declare
   v_me uuid := public.current_profile_id();
   v_c public.courses;
 begin
-  if v_me is null then
-    raise exception 'leave_slot: authentication required' using errcode = '42501';
+  if v_me is null or not public.current_account_active() then
+    raise exception 'leave_slot: active account required' using errcode = '42501';
   end if;
 
   select * into v_c from public.courses where id = p_course for update;
@@ -692,6 +708,9 @@ begin
   end if;
   if v_c.prof_id is distinct from v_me then
     raise exception 'leave_slot: only the assigned prof' using errcode = '42501';
+  end if;
+  if v_c.is_private then
+    raise exception 'leave_slot: private course (admin only)' using errcode = '42501';
   end if;
   if v_c.starts_at <= now() then
     raise exception 'leave_slot: course has already started'

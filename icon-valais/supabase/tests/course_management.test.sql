@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(66);
+select plan(73);
 
 create temp table ids (k text primary key, v uuid);
 grant all on ids to authenticated;
@@ -106,6 +106,8 @@ insert into res values ('privp1', pg_temp.mk_series(pg_temp.k('p1'), 1, interval
 insert into res values ('past', pg_temp.mk_series(pg_temp.k('p1'), 1, interval '-1 hour'));
 -- kid : cours unique de p1 où le parent a inscrit son enfant
 insert into res values ('kid', pg_temp.mk_series(pg_temp.k('p1'), 1, interval '3 days'));
+-- lvref : cours de l'admin assigné à p2 (p2 sera ensuite refusé)
+insert into res values ('lvref', pg_temp.mk_series(pg_temp.k('a'), 1, interval '5 days', false, pg_temp.k('p2')));
 -- vac : créneau vacant (admin) ; om : open mat vacant ; vacpriv : privé vacant
 insert into res values ('vac', pg_temp.mk_series(pg_temp.k('a'), 1, interval '4 days'));
 update public.courses set prof_id = null where id = (select v[1] from res where k = 'vac');
@@ -235,7 +237,8 @@ select is((select count(*)::int from public.notification_outbox where sent_at is
           0, 'lignes en attente d''envoi');
 
 select pg_temp.login('b1000000-0000-0000-0000-0000000000b1');
-select is(public.cancel_course(pg_temp.r('can', 2), 'following'), 0, 'déjà annulés : 0, idempotent');
+select is(pg_temp.hint_of($$ select public.cancel_course(pg_temp.r('can', 2), 'following') $$),
+          'course_cancelled', 'cancel avec un cours ciblé déjà annulé → course_cancelled');
 select is(pg_temp.hint_of($$ select public.update_course(pg_temp.r('can', 3), '{"places":10}', 'one') $$),
           'course_cancelled', 'update d''un cours annulé → course_cancelled');
 select is(pg_temp.hint_of($$ select public.cancel_course(pg_temp.r('past'), 'one') $$),
@@ -282,6 +285,10 @@ select pg_temp.login('a0000000-0000-0000-0000-00000000000a');
 select is(pg_temp.hint_of($$ select public.assign_prof(pg_temp.r('vacpriv'), pg_temp.k('s1')) $$),
           'invalid_prof', 'assign_prof vers un élève → invalid_prof');
 select throws_ok($$ select public.assign_prof(pg_temp.r('vacpriv'), pg_temp.k('s1')) $$, '22023', null, 'assign_prof vers un élève → 22023');
+select is(pg_temp.hint_of(format($$ select public.assign_prof(pg_temp.r('past'), %L) $$, pg_temp.k('p2'))),
+          'course_started', 'assign_prof sur un cours commencé → course_started');
+select is(pg_temp.hint_of(format($$ select public.assign_prof(pg_temp.r('can', 3), %L) $$, pg_temp.k('p2'))),
+          'course_cancelled', 'assign_prof sur un cours annulé → course_cancelled');
 select lives_ok($$ select public.assign_prof(pg_temp.r('vacpriv'), pg_temp.k('p2')) $$, 'admin assigne p2');
 select is((select prof_id from public.courses where id = pg_temp.r('vacpriv')), pg_temp.k('p2'), 'p2 assigné');
 select lives_ok($$ select public.assign_prof(pg_temp.r('vacpriv'), null) $$, 'admin libère le créneau');
@@ -296,11 +303,21 @@ select pg_temp.login('b2000000-0000-0000-0000-0000000000b2');
 select throws_ok($$ select public.leave_slot(pg_temp.r('vac')) $$, '42501', null, 'leave_slot par un prof non assigné → 42501');
 reset role;
 select pg_temp.login('b1000000-0000-0000-0000-0000000000b1');
+select throws_ok($$ select public.leave_slot(pg_temp.r('priv')) $$, '42501', null, 'leave_slot sur un cours privé → 42501');
 select lives_ok($$ select public.leave_slot(pg_temp.r('vac')) $$, 'leave_slot par le prof assigné');
 select is(pg_temp.hint_of($$ select public.leave_slot(pg_temp.r('past')) $$), 'course_started', 'leave_slot d''un cours commencé → course_started');
 reset role;
 select is((select (prof_id is null and vacancy_notified_at is null) from public.courses where id = pg_temp.r('vac')),
           true, 'prof_id et vacancy_notified_at remis à null');
+select is((select prof_id from public.courses where id = pg_temp.r('priv')), pg_temp.k('p1'), 'cours privé : prof inchangé');
+
+-- compte devenu inactif après l'assignation
+update public.profiles set prof_status = 'refuse' where id = pg_temp.k('p2');
+select pg_temp.login('b2000000-0000-0000-0000-0000000000b2');
+select throws_ok($$ select public.leave_slot(pg_temp.r('lvref')) $$, '42501', null, 'leave_slot par un prof refusé → 42501');
+reset role;
+select is((select prof_id from public.courses where id = pg_temp.r('lvref')), pg_temp.k('p2'), 'prof refusé : cours inchangé');
+update public.profiles set prof_status = 'valide' where id = pg_temp.k('p2');
 
 -- ---------------------------------------------------------------------------
 -- outbox et bookings illisibles par authenticated
@@ -314,6 +331,14 @@ reset role;
 set local role service_role;
 select is((select count(*)::int from public.notification_outbox), 7, 'service_role : outbox lisible (6 + 1)');
 reset role;
+
+-- profil sans login ni parent (état impossible, forcé en levant la contrainte
+-- dans la transaction de test) : notify_profile n'écrit rien
+alter table public.profiles drop constraint profiles_login_or_parent;
+insert into public.profiles (first_name, last_name, age, sports) values ('Or', 'Phan', 9, '{jjb}');
+select public.notify_profile((select id from public.profiles where first_name = 'Or' and last_name = 'Phan'),
+                             'course_cancelled', pg_temp.r('kid'));
+select is((select count(*)::int from public.notification_outbox), 7, 'sans login ni parent : aucune ligne');
 
 select * from finish();
 rollback;
