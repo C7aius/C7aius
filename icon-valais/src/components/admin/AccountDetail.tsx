@@ -26,7 +26,11 @@ export function AccountDetail({ id, onChanged }: { id: string; onChanged?: () =>
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
+    const { data, error: e } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
+    if (e) {
+      setError(rpcErrorKey(e));
+      return;
+    }
     if (data) {
       setProfile(data as Profile);
       setMissing(false);
@@ -64,6 +68,7 @@ export function AccountDetail({ id, onChanged }: { id: string; onChanged?: () =>
     }
   };
 
+  if (!profile && error) return <ErrorText>{t(error)}</ErrorText>;
   if (missing) return <Text style={styles.body}>{t('admin.notFound')}</Text>;
   if (!profile) return <Text style={styles.body}>{t('common.loading')}</Text>;
 

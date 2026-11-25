@@ -8,6 +8,9 @@ import AdminUser from '../user/[id]';
 const mockRpc = jest.fn();
 const mockPush = jest.fn();
 let mockRole = 'admin';
+let mockReady = true;
+let mockFocusCb: (() => void) | null = null;
+let mockSelectError: { code?: string } | null = null;
 let mockParams: { id?: string } = {};
 let mockRows: Record<string, unknown>[] = [];
 
@@ -21,20 +24,27 @@ const prof = (id: string, first: string, prof_status: string | null, role = 'pro
 });
 
 jest.mock('@/src/auth/AuthProvider', () => ({
-  useAuth: () => ({ profile: { id: 'admin1', role: mockRole } }),
+  useAuth: () => ({ profile: mockReady ? { id: 'admin1', role: mockRole } : null, ready: mockReady }),
 }));
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush, back: jest.fn(), replace: jest.fn() }),
   useLocalSearchParams: () => mockParams,
+  useFocusEffect: (cb: () => void) => {
+    mockFocusCb = cb;
+    require('react').useEffect(cb, []);
+  },
 }));
 jest.mock('@/src/lib/supabase', () => ({
   supabase: {
     rpc: (...a: unknown[]) => mockRpc(...a),
     from: () => ({
       select: () => ({
-        order: async () => ({ data: mockRows, error: null }),
+        order: async () => ({ data: mockRows, error: mockSelectError }),
         eq: (_c: string, id: string) => ({
-          maybeSingle: async () => ({ data: mockRows.find((r) => r.id === id) ?? null, error: null }),
+          maybeSingle: async () => ({
+            data: mockSelectError ? null : (mockRows.find((r) => r.id === id) ?? null),
+            error: mockSelectError,
+          }),
         }),
       }),
     }),
@@ -47,6 +57,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   jest.clearAllMocks();
   mockRole = 'admin';
+  mockReady = true;
+  mockSelectError = null;
   mockParams = {};
   mockRows = [
     prof('p1', 'Alice', 'en_attente'),
@@ -78,6 +90,24 @@ describe('account list', () => {
     await fireEvent.changeText(screen.getByLabelText('Rechercher'), 'bru');
     expect(screen.getByText('Bruno Test')).toBeTruthy();
     expect(screen.queryByText('Alice Test')).toBeNull();
+  });
+
+  it('reloads the list when the screen regains focus', async () => {
+    await render(<AdminList />);
+    await waitFor(() => expect(screen.getByText('Alice Test')).toBeTruthy());
+    mockRows = [prof('p1', 'Alice', 'valide'), prof('p2', 'Bruno', 'valide'), prof('e1', 'Chloe', null, 'eleve')];
+    await act(async () => {
+      mockFocusCb?.();
+    });
+    await press('Profs en attente');
+    expect(screen.queryByText('Alice Test')).toBeNull();
+  });
+
+  it('shows loading, not forbidden, while the profile is loading', async () => {
+    mockReady = false;
+    await render(<AdminList />);
+    expect(screen.getByText(i18n.t('common.loading'))).toBeTruthy();
+    expect(screen.queryByText(i18n.t('admin.forbidden'))).toBeNull();
   });
 
   it('refuses non-admins', async () => {
@@ -130,6 +160,38 @@ describe('account detail', () => {
     await press('Valider');
     await waitFor(() => expect(screen.getByText(i18n.t('errors.notAllowed'))).toBeTruthy());
     expect(i18n.t('errors.notAllowed')).not.toBe('errors.notAllowed');
+  });
+
+  it('shows loading, not forbidden, while the profile is loading', async () => {
+    mockReady = false;
+    mockParams = { id: 'p1' };
+    await render(<AdminUser />);
+    expect(screen.getByText(i18n.t('common.loading'))).toBeTruthy();
+    expect(screen.queryByText(i18n.t('admin.forbidden'))).toBeNull();
+  });
+
+  it('shows a translated error, not "not found", when loading the account fails', async () => {
+    mockSelectError = { code: '42501' };
+    mockParams = { id: 'p1' };
+    await render(<AdminUser />);
+    await waitFor(() => expect(screen.getByText(i18n.t('errors.notAllowed'))).toBeTruthy());
+    expect(screen.queryByText(i18n.t('admin.notFound'))).toBeNull();
+  });
+
+  it('maps P0002 to the not-found message', async () => {
+    mockParams = { id: 'p1' };
+    mockRpc.mockResolvedValue({ data: null, error: { code: 'P0002' } });
+    await render(<AdminUser />);
+    await waitFor(() => expect(screen.getByText('Valider')).toBeTruthy());
+    await press('Valider');
+    await waitFor(() => expect(screen.getByText(i18n.t('errors.notFound'))).toBeTruthy());
+  });
+
+  it('shows an expired membership', async () => {
+    mockRows[2] = { ...mockRows[2], paid_until: '2020-12-31' };
+    mockParams = { id: 'e1' };
+    await render(<AdminUser />);
+    await waitFor(() => expect(screen.getByText('Cotisation échue le 31.12.2020')).toBeTruthy());
   });
 
   it('refuses non-admins', async () => {

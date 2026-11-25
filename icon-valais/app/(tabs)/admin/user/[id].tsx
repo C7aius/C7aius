@@ -9,7 +9,7 @@ import { colors } from '@/src/theme';
 
 export default function AdminUser() {
   const { t } = useTranslation();
-  const { profile } = useAuth();
+  const { profile, ready } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 
@@ -18,7 +18,7 @@ export default function AdminUser() {
       {profile?.role === 'admin' && id ? (
         <AccountDetail id={id} />
       ) : (
-        <Text style={styles.body}>{t('admin.forbidden')}</Text>
+        <Text style={styles.body}>{ready ? t('admin.forbidden') : t('common.loading')}</Text>
       )}
       <Button title={t('common.back')} variant="secondary" onPress={() => router.back()} />
     </ScrollView>

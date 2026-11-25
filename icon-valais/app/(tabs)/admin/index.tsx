@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth, type Profile } from '@/src/auth/AuthProvider';
@@ -22,7 +22,7 @@ const WIDE = 900;
 
 export default function Admin() {
   const { t } = useTranslation();
-  const { profile } = useAuth();
+  const { profile, ready } = useAuth();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const wide = width >= WIDE;
@@ -46,9 +46,12 @@ export default function Admin() {
     }
   }, []);
 
-  useEffect(() => {
-    if (isAdmin) void load();
-  }, [isAdmin, load]);
+  // recharge à chaque retour sur l'écran (ex. après une action dans la fiche)
+  useFocusEffect(
+    useCallback(() => {
+      if (isAdmin) void load();
+    }, [isAdmin, load]),
+  );
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -63,7 +66,7 @@ export default function Admin() {
   if (!isAdmin) {
     return (
       <View style={styles.center}>
-        <Text style={styles.body}>{t('admin.forbidden')}</Text>
+        <Text style={styles.body}>{ready ? t('admin.forbidden') : t('common.loading')}</Text>
       </View>
     );
   }
