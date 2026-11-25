@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 
 import i18n, { LANGS, type Lang } from '@/src/i18n';
 import { clearConsentSendResult } from './consentNotice';
+import { registerForPush } from '@/src/lib/push';
 import { launchedFromRecoveryLink, supabase } from '@/src/lib/supabase';
 import type { Database } from '@/src/lib/database.types';
 
@@ -95,6 +96,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void i18n.changeLanguage(savedLang as Lang);
     }
   }, [savedLang, userId]);
+
+  // Jeton de notifications : une fois par utilisateur et par session d'app, après un profil actif frais.
+  const pushUser = useRef<string | null>(null);
+  const activeNow = fresh && loaded.isActive;
+  useEffect(() => {
+    if (!activeNow || !userId || pushUser.current === userId) return;
+    pushUser.current = userId;
+    registerForPush().catch(() => console.warn('push registration failed'));
+  }, [activeNow, userId]);
 
   const value = useMemo<AuthState>(
     () => ({
