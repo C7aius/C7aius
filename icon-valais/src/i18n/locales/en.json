@@ -1,0 +1,87 @@
+{
+  "common": {
+    "appName": "Icon Valais",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "back": "Back",
+    "next": "Next",
+    "loading": "Loading…",
+    "search": "Search",
+    "yes": "Yes",
+    "no": "No",
+    "language": "Language"
+  },
+  "auth": {
+    "login": "Log in",
+    "logout": "Log out",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot password?",
+    "noAccount": "No account yet?",
+    "haveAccount": "Already have an account?",
+    "invalidCredentials": "Incorrect email or password"
+  },
+  "signup": {
+    "title": "Create an account",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "confirmPassword": "Confirm password",
+    "submit": "Sign up",
+    "success": "Account created successfully",
+    "passwordMismatch": "Passwords do not match"
+  },
+  "profile": {
+    "title": "My profile",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "birthDate": "Date of birth",
+    "phone": "Phone",
+    "belt": "Belt",
+    "sport": "Sport",
+    "role": "Role",
+    "language": "Language",
+    "saved": "Profile saved"
+  },
+  "belts": {
+    "white": "White",
+    "blue": "Blue",
+    "purple": "Purple",
+    "brown": "Brown",
+    "black": "Black"
+  },
+  "sports": {
+    "bjj": "Brazilian Jiu-Jitsu",
+    "mma": "MMA",
+    "grappling": "Grappling",
+    "boxing": "Boxing"
+  },
+  "roles": {
+    "member": "Member",
+    "coach": "Coach",
+    "admin": "Administrator"
+  },
+  "admin": {
+    "title": "Administration",
+    "members": "Members",
+    "classes": "Classes",
+    "approve": "Approve",
+    "reject": "Reject",
+    "pending": "Pending"
+  },
+  "tabs": {
+    "home": "Home",
+    "schedule": "Schedule",
+    "profile": "Profile",
+    "admin": "Admin"
+  },
+  "errors": {
+    "generic": "Something went wrong",
+    "network": "Connection problem, please try again",
+    "required": "This field is required",
+    "invalidEmail": "Invalid email address",
+    "passwordTooShort": "Password is too short"
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "common": {
+    "appName": "Icon Valais",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "confirm": "Bestätigen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "back": "Zurück",
+    "next": "Weiter",
+    "loading": "Laden…",
+    "search": "Suchen",
+    "yes": "Ja",
+    "no": "Nein",
+    "language": "Sprache"
+  },
+  "auth": {
+    "login": "Anmelden",
+    "logout": "Abmelden",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "forgotPassword": "Passwort vergessen?",
+    "noAccount": "Noch kein Konto?",
+    "haveAccount": "Bereits ein Konto?",
+    "invalidCredentials": "E-Mail oder Passwort falsch"
+  },
+  "signup": {
+    "title": "Konto erstellen",
+    "firstName": "Vorname",
+    "lastName": "Nachname",
+    "confirmPassword": "Passwort bestätigen",
+    "submit": "Registrieren",
+    "success": "Konto erfolgreich erstellt",
+    "passwordMismatch": "Die Passwörter stimmen nicht überein"
+  },
+  "profile": {
+    "title": "Mein Profil",
+    "firstName": "Vorname",
+    "lastName": "Nachname",
+    "birthDate": "Geburtsdatum",
+    "phone": "Telefon",
+    "belt": "Gürtel",
+    "sport": "Sportart",
+    "role": "Rolle",
+    "language": "Sprache",
+    "saved": "Profil gespeichert"
+  },
+  "belts": {
+    "white": "Weiss",
+    "blue": "Blau",
+    "purple": "Violett",
+    "brown": "Braun",
+    "black": "Schwarz"
+  },
+  "sports": {
+    "bjj": "Brasilianisches Jiu-Jitsu",
+    "mma": "MMA",
+    "grappling": "Grappling",
+    "boxing": "Boxen"
+  },
+  "roles": {
+    "member": "Mitglied",
+    "coach": "Trainer",
+    "admin": "Administrator"
+  },
+  "admin": {
+    "title": "Verwaltung",
+    "members": "Mitglieder",
+    "classes": "Kurse",
+    "approve": "Genehmigen",
+    "reject": "Ablehnen",
+    "pending": "Ausstehend"
+  },
+  "tabs": {
+    "home": "Start",
+    "schedule": "Stundenplan",
+    "profile": "Profil",
+    "admin": "Admin"
+  },
+  "errors": {
+    "generic": "Ein Fehler ist aufgetreten",
+    "network": "Verbindungsproblem, bitte erneut versuchen",
+    "required": "Dieses Feld ist erforderlich",
+    "invalidEmail": "Ungültige E-Mail-Adresse",
+    "passwordTooShort": "Das Passwort ist zu kurz"
+  }
+}

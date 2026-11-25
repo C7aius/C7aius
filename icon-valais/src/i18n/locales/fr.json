@@ -1,0 +1,87 @@
+{
+  "common": {
+    "appName": "Icon Valais",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "back": "Retour",
+    "next": "Suivant",
+    "loading": "Chargement…",
+    "search": "Rechercher",
+    "yes": "Oui",
+    "no": "Non",
+    "language": "Langue"
+  },
+  "auth": {
+    "login": "Se connecter",
+    "logout": "Se déconnecter",
+    "email": "E-mail",
+    "password": "Mot de passe",
+    "forgotPassword": "Mot de passe oublié ?",
+    "noAccount": "Pas encore de compte ?",
+    "haveAccount": "Déjà un compte ?",
+    "invalidCredentials": "E-mail ou mot de passe incorrect"
+  },
+  "signup": {
+    "title": "Créer un compte",
+    "firstName": "Prénom",
+    "lastName": "Nom",
+    "confirmPassword": "Confirmer le mot de passe",
+    "submit": "S'inscrire",
+    "success": "Compte créé avec succès",
+    "passwordMismatch": "Les mots de passe ne correspondent pas"
+  },
+  "profile": {
+    "title": "Mon profil",
+    "firstName": "Prénom",
+    "lastName": "Nom",
+    "birthDate": "Date de naissance",
+    "phone": "Téléphone",
+    "belt": "Ceinture",
+    "sport": "Sport",
+    "role": "Rôle",
+    "language": "Langue",
+    "saved": "Profil enregistré"
+  },
+  "belts": {
+    "white": "Blanche",
+    "blue": "Bleue",
+    "purple": "Violette",
+    "brown": "Marron",
+    "black": "Noire"
+  },
+  "sports": {
+    "bjj": "Jiu-jitsu brésilien",
+    "mma": "MMA",
+    "grappling": "Grappling",
+    "boxing": "Boxe"
+  },
+  "roles": {
+    "member": "Membre",
+    "coach": "Coach",
+    "admin": "Administrateur"
+  },
+  "admin": {
+    "title": "Administration",
+    "members": "Membres",
+    "classes": "Cours",
+    "approve": "Approuver",
+    "reject": "Refuser",
+    "pending": "En attente"
+  },
+  "tabs": {
+    "home": "Accueil",
+    "schedule": "Planning",
+    "profile": "Profil",
+    "admin": "Admin"
+  },
+  "errors": {
+    "generic": "Une erreur est survenue",
+    "network": "Problème de connexion, réessayez",
+    "required": "Ce champ est obligatoire",
+    "invalidEmail": "Adresse e-mail invalide",
+    "passwordTooShort": "Le mot de passe est trop court"
+  }
+}

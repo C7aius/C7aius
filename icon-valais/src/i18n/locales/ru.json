@@ -1,0 +1,87 @@
+{
+  "common": {
+    "appName": "Icon Valais",
+    "save": "Сохранить",
+    "cancel": "Отмена",
+    "confirm": "Подтвердить",
+    "delete": "Удалить",
+    "edit": "Изменить",
+    "back": "Назад",
+    "next": "Далее",
+    "loading": "Загрузка…",
+    "search": "Поиск",
+    "yes": "Да",
+    "no": "Нет",
+    "language": "Язык"
+  },
+  "auth": {
+    "login": "Войти",
+    "logout": "Выйти",
+    "email": "Эл. почта",
+    "password": "Пароль",
+    "forgotPassword": "Забыли пароль?",
+    "noAccount": "Нет аккаунта?",
+    "haveAccount": "Уже есть аккаунт?",
+    "invalidCredentials": "Неверная почта или пароль"
+  },
+  "signup": {
+    "title": "Создать аккаунт",
+    "firstName": "Имя",
+    "lastName": "Фамилия",
+    "confirmPassword": "Подтвердите пароль",
+    "submit": "Зарегистрироваться",
+    "success": "Аккаунт успешно создан",
+    "passwordMismatch": "Пароли не совпадают"
+  },
+  "profile": {
+    "title": "Мой профиль",
+    "firstName": "Имя",
+    "lastName": "Фамилия",
+    "birthDate": "Дата рождения",
+    "phone": "Телефон",
+    "belt": "Пояс",
+    "sport": "Вид спорта",
+    "role": "Роль",
+    "language": "Язык",
+    "saved": "Профиль сохранён"
+  },
+  "belts": {
+    "white": "Белый",
+    "blue": "Синий",
+    "purple": "Фиолетовый",
+    "brown": "Коричневый",
+    "black": "Чёрный"
+  },
+  "sports": {
+    "bjj": "Бразильское джиу-джитсу",
+    "mma": "ММА",
+    "grappling": "Грэпплинг",
+    "boxing": "Бокс"
+  },
+  "roles": {
+    "member": "Участник",
+    "coach": "Тренер",
+    "admin": "Администратор"
+  },
+  "admin": {
+    "title": "Администрирование",
+    "members": "Участники",
+    "classes": "Занятия",
+    "approve": "Одобрить",
+    "reject": "Отклонить",
+    "pending": "В ожидании"
+  },
+  "tabs": {
+    "home": "Главная",
+    "schedule": "Расписание",
+    "profile": "Профиль",
+    "admin": "Админ"
+  },
+  "errors": {
+    "generic": "Произошла ошибка",
+    "network": "Проблема с соединением, повторите попытку",
+    "required": "Обязательное поле",
+    "invalidEmail": "Неверный адрес эл. почты",
+    "passwordTooShort": "Пароль слишком короткий"
+  }
+}
