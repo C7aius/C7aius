@@ -54,7 +54,8 @@
     "cv": "Lebenslauf / Werdegang",
     "stepParent": "E-Mail der Eltern",
     "parentHint": "Du bist unter 16: Ein Elternteil muss deine Anmeldung per E-Mail bestätigen.",
-    "parentEmail": "E-Mail der Eltern"
+    "parentEmail": "E-Mail der Eltern",
+    "checkEmail": "Konto erstellt. Bestätige deine E-Mail-Adresse über die gesendete Nachricht und melde dich dann an."
   },
   "profile": {
     "title": "Mein Profil",

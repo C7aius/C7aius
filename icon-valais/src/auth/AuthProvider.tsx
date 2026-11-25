@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 
 import { supabase } from '@/src/lib/supabase';
@@ -18,13 +18,15 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+type Loaded = { userId: string | null; profile: Profile | null; isActive: boolean };
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [isActive, setIsActive] = useState(false);
   const [sessionLoaded, setSessionLoaded] = useState(false);
-  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
   const userId = session?.user.id ?? null;
+  const currentId = useRef<string | null>(null);
+  currentId.current = userId;
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -39,31 +41,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const load = useCallback(async (id: string | null) => {
-    if (!id) {
-      setProfile(null);
-      setIsActive(false);
-      setProfileLoaded(true);
-      return;
+    let result: Loaded = { userId: id, profile: null, isActive: false };
+    if (id) {
+      try {
+        const [p, active] = await Promise.all([
+          supabase.from('profiles').select('*').eq('auth_user_id', id).maybeSingle(),
+          supabase.rpc('current_account_active'),
+        ]);
+        result = {
+          userId: id,
+          profile: p.error ? null : p.data,
+          isActive: !p.error && !active.error && active.data === true,
+        };
+      } catch {
+        // profil indisponible : reste inactif
+      }
     }
-    try {
-      const [p, active] = await Promise.all([
-        supabase.from('profiles').select('*').eq('auth_user_id', id).maybeSingle(),
-        supabase.rpc('current_account_active'),
-      ]);
-      setProfile(p.error ? null : p.data);
-      setIsActive(!p.error && !active.error && active.data === true);
-    } catch {
-      setProfile(null);
-      setIsActive(false);
-    } finally {
-      setProfileLoaded(true);
-    }
+    // résultat périmé (autre utilisateur entre-temps) : ignoré
+    if (currentId.current === id) setLoaded(result);
   }, []);
 
   useEffect(() => {
-    if (!sessionLoaded) return;
-    setProfileLoaded(false);
-    void load(userId);
+    if (sessionLoaded) void load(userId);
   }, [sessionLoaded, userId, load]);
 
   const refresh = useCallback(() => load(userId), [load, userId]);
@@ -71,9 +70,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   }, []);
 
+  // `ready` : le profil chargé correspond à l'utilisateur de la session courante
+  const fresh = sessionLoaded && loaded !== null && loaded.userId === userId;
   const value = useMemo<AuthState>(
-    () => ({ session, profile, isActive, ready: sessionLoaded && profileLoaded, signOut, refresh }),
-    [session, profile, isActive, sessionLoaded, profileLoaded, signOut, refresh],
+    () => ({
+      session,
+      profile: fresh ? loaded.profile : null,
+      isActive: fresh ? loaded.isActive : false,
+      ready: fresh,
+      signOut,
+      refresh,
+    }),
+    [session, fresh, loaded, signOut, refresh],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

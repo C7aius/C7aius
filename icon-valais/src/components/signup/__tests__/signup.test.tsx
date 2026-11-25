@@ -132,4 +132,15 @@ describe('SignupWizard', () => {
     });
     await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
   });
+
+  it('shows the check-email notice (not an error) when signUp returns no session', async () => {
+    mockSignUp.mockResolvedValue({ data: { session: null, user: { id: 'u' } }, error: null });
+    await render(<SignupWizard />);
+    await goToSports('30');
+    await press('MMA');
+    await type('Années de MMA', '2');
+    await press("S'inscrire");
+    expect(await screen.findByText('Compte créé', { exact: false })).toBeTruthy();
+    expect(screen.queryByText('Une erreur est survenue')).toBeNull();
+  });
 });

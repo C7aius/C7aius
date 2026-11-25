@@ -54,7 +54,8 @@
     "cv": "CV / parcours",
     "stepParent": "E-mail du parent",
     "parentHint": "Vous avez moins de 16 ans : un parent doit confirmer votre inscription par e-mail.",
-    "parentEmail": "E-mail du parent"
+    "parentEmail": "E-mail du parent",
+    "checkEmail": "Compte créé. Consultez votre boîte e-mail pour confirmer votre adresse, puis connectez-vous."
   },
   "profile": {
     "title": "Mon profil",

@@ -48,6 +48,7 @@ export function SignupWizard() {
   const [index, setIndex] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const steps = stepsFor(draft);
@@ -74,6 +75,7 @@ export function SignupWizard() {
     const input = parsed.data;
     setBusy(true);
     setFormError(null);
+    setNotice(null);
     try {
       const { data, error } = await supabase.auth.signUp({
         email: input.email,
@@ -85,7 +87,8 @@ export function SignupWizard() {
         return;
       }
       if (!data.session) {
-        setFormError('errors.generic');
+        // confirmation par e-mail requise : ce n'est pas un échec
+        setNotice('signup.checkEmail');
         return;
       }
       if (needsParentConsent(input.age, false)) {
@@ -117,6 +120,7 @@ export function SignupWizard() {
       </Text>
       <Text style={styles.title}>{t(TITLES[step])}</Text>
       <Current values={draft} onChange={onChange} errors={errors} />
+      {notice ? <Text style={styles.notice}>{t(notice)}</Text> : null}
       {formError ? <ErrorText>{t(formError)}</ErrorText> : null}
       <View style={styles.actions}>
         <Button title={isLast ? t('signup.submit') : t('common.next')} onPress={next} disabled={busy} />
@@ -132,5 +136,6 @@ const styles = StyleSheet.create({
   container: { padding: 24, paddingTop: 48 },
   progress: { color: colors.grey, marginBottom: 4 },
   title: { color: colors.orange, fontSize: 24, fontWeight: '700', marginBottom: 20 },
+  notice: { color: colors.white, marginVertical: 8 },
   actions: { marginTop: 12 },
 });

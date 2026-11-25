@@ -54,7 +54,8 @@
     "cv": "CV / background",
     "stepParent": "Parent's email",
     "parentHint": "You are under 16: a parent must confirm your registration by email.",
-    "parentEmail": "Parent's email"
+    "parentEmail": "Parent's email",
+    "checkEmail": "Account created. Check your email to confirm your address, then sign in."
   },
   "profile": {
     "title": "My profile",
