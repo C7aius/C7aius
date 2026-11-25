@@ -22,7 +22,11 @@
     "forgotPassword": "Passwort vergessen?",
     "noAccount": "Noch kein Konto?",
     "haveAccount": "Bereits ein Konto?",
-    "invalidCredentials": "E-Mail oder Passwort falsch"
+    "invalidCredentials": "E-Mail oder Passwort falsch",
+    "resetTitle": "Passwort zurücksetzen",
+    "resetSend": "Link senden",
+    "resetSent": "Falls für diese Adresse ein Konto existiert, wurde soeben eine E-Mail gesendet.",
+    "backToLogin": "Zurück zur Anmeldung"
   },
   "signup": {
     "title": "Konto erstellen",
@@ -31,7 +35,26 @@
     "confirmPassword": "Passwort bestätigen",
     "submit": "Registrieren",
     "success": "Konto erfolgreich erstellt",
-    "passwordMismatch": "Die Passwörter stimmen nicht überein"
+    "passwordMismatch": "Die Passwörter stimmen nicht überein",
+    "stepOf": "Schritt {{current}} von {{total}}",
+    "stepRole": "Du bist …",
+    "roleStudent": "Schüler",
+    "roleCoach": "Trainer",
+    "stepIdentity": "Deine Angaben",
+    "phone": "Telefon (optional)",
+    "age": "Alter",
+    "stepSports": "Deine Sportarten",
+    "belt": "BJJ-Gürtel",
+    "yearsGrappling": "Jahre Grappling",
+    "yearsMma": "Jahre MMA",
+    "stepCoach": "Trainerprofil",
+    "coachYears": "Jahre Trainererfahrung",
+    "trainingPlaces": "Trainingsorte",
+    "competitionAwards": "Wettkampferfolge",
+    "cv": "Lebenslauf / Werdegang",
+    "stepParent": "E-Mail der Eltern",
+    "parentHint": "Du bist unter 16: Ein Elternteil muss deine Anmeldung per E-Mail bestätigen.",
+    "parentEmail": "E-Mail der Eltern"
   },
   "profile": {
     "title": "Mein Profil",
@@ -50,13 +73,23 @@
     "blue": "Blau",
     "purple": "Violett",
     "brown": "Braun",
-    "black": "Schwarz"
+    "black": "Schwarz",
+    "blanche": "Weiss",
+    "grise": "Grau",
+    "jaune": "Gelb",
+    "orange": "Orange",
+    "verte": "Grün",
+    "bleue": "Blau",
+    "violette": "Violett",
+    "marron": "Braun",
+    "noire": "Schwarz"
   },
   "sports": {
     "bjj": "Brasilianisches Jiu-Jitsu",
     "mma": "MMA",
     "grappling": "Grappling",
-    "boxing": "Boxen"
+    "boxing": "Boxen",
+    "jjb": "Brasilianisches Jiu-Jitsu"
   },
   "roles": {
     "member": "Mitglied",
@@ -90,6 +123,23 @@
     "yearsRequired": "Gib die Jahre Erfahrung an",
     "yearsInvalid": "Ungültige Anzahl Jahre",
     "parentEmailRequired": "Die E-Mail eines Elternteils ist erforderlich",
-    "coachYearsRequired": "Gib deine Jahre als Trainer an"
+    "coachYearsRequired": "Gib deine Jahre als Trainer an",
+    "emailTaken": "Diese E-Mail-Adresse wird bereits verwendet",
+    "signupFailed": "Die Registrierung ist fehlgeschlagen. Prüfe deine Angaben.",
+    "passwordMismatch": "Die Passwörter stimmen nicht überein"
+  },
+  "pending": {
+    "profTitle": "Konto wartet auf Freigabe",
+    "profBody": "Ein Administrator muss dein Trainerkonto freigeben. Sobald es freigegeben ist, kannst du die App nutzen.",
+    "profRefused": "Deine Anfrage für ein Trainerkonto wurde abgelehnt.",
+    "minorTitle": "Zustimmung der Eltern erforderlich",
+    "minorBody": "Ein Elternteil muss deine Anmeldung über die ihm gesendete E-Mail bestätigen. Danach kannst du die App nutzen.",
+    "resend": "E-Mail erneut an Eltern senden",
+    "resent": "E-Mail an die Eltern gesendet.",
+    "tooMany": "Zu viele Anfragen: Versuche es später erneut.",
+    "notEligible": "Für dieses Konto kann keine E-Mail gesendet werden.",
+    "unknownTitle": "Konto nicht verfügbar",
+    "unknownBody": "Dein Profil konnte nicht geladen werden. Versuche es erneut oder melde dich ab.",
+    "refresh": "Erneut prüfen"
   }
 }

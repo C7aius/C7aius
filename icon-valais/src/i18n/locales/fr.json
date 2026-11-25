@@ -22,7 +22,11 @@
     "forgotPassword": "Mot de passe oublié ?",
     "noAccount": "Pas encore de compte ?",
     "haveAccount": "Déjà un compte ?",
-    "invalidCredentials": "E-mail ou mot de passe incorrect"
+    "invalidCredentials": "E-mail ou mot de passe incorrect",
+    "resetTitle": "Réinitialiser le mot de passe",
+    "resetSend": "Envoyer le lien",
+    "resetSent": "Si un compte existe pour cette adresse, un e-mail vient d'être envoyé.",
+    "backToLogin": "Retour à la connexion"
   },
   "signup": {
     "title": "Créer un compte",
@@ -31,7 +35,26 @@
     "confirmPassword": "Confirmer le mot de passe",
     "submit": "S'inscrire",
     "success": "Compte créé avec succès",
-    "passwordMismatch": "Les mots de passe ne correspondent pas"
+    "passwordMismatch": "Les mots de passe ne correspondent pas",
+    "stepOf": "Étape {{current}} sur {{total}}",
+    "stepRole": "Vous êtes…",
+    "roleStudent": "Élève",
+    "roleCoach": "Professeur",
+    "stepIdentity": "Votre identité",
+    "phone": "Téléphone (facultatif)",
+    "age": "Âge",
+    "stepSports": "Vos sports",
+    "belt": "Ceinture de JJB",
+    "yearsGrappling": "Années de grappling",
+    "yearsMma": "Années de MMA",
+    "stepCoach": "Profil de coach",
+    "coachYears": "Années d'expérience de coach",
+    "trainingPlaces": "Lieux d'entraînement",
+    "competitionAwards": "Palmarès en compétition",
+    "cv": "CV / parcours",
+    "stepParent": "E-mail du parent",
+    "parentHint": "Vous avez moins de 16 ans : un parent doit confirmer votre inscription par e-mail.",
+    "parentEmail": "E-mail du parent"
   },
   "profile": {
     "title": "Mon profil",
@@ -50,13 +73,23 @@
     "blue": "Bleue",
     "purple": "Violette",
     "brown": "Marron",
-    "black": "Noire"
+    "black": "Noire",
+    "blanche": "Blanche",
+    "grise": "Grise",
+    "jaune": "Jaune",
+    "orange": "Orange",
+    "verte": "Verte",
+    "bleue": "Bleue",
+    "violette": "Violette",
+    "marron": "Marron",
+    "noire": "Noire"
   },
   "sports": {
     "bjj": "Jiu-jitsu brésilien",
     "mma": "MMA",
     "grappling": "Grappling",
-    "boxing": "Boxe"
+    "boxing": "Boxe",
+    "jjb": "Jiu-jitsu brésilien"
   },
   "roles": {
     "member": "Membre",
@@ -90,6 +123,23 @@
     "yearsRequired": "Indiquez les années de pratique",
     "yearsInvalid": "Nombre d'années invalide",
     "parentEmailRequired": "L'e-mail d'un parent est obligatoire",
-    "coachYearsRequired": "Indiquez vos années d'expérience de coach"
+    "coachYearsRequired": "Indiquez vos années d'expérience de coach",
+    "emailTaken": "Cette adresse e-mail est déjà utilisée",
+    "signupFailed": "L'inscription a échoué. Vérifiez vos informations.",
+    "passwordMismatch": "Les mots de passe ne correspondent pas"
+  },
+  "pending": {
+    "profTitle": "Compte en attente de validation",
+    "profBody": "Un administrateur doit valider votre compte de professeur. Vous pourrez accéder à l'application dès qu'il sera validé.",
+    "profRefused": "Votre demande de compte professeur a été refusée.",
+    "minorTitle": "Consentement parental requis",
+    "minorBody": "Un parent doit confirmer votre inscription grâce à l'e-mail qui lui a été envoyé. Vous pourrez ensuite accéder à l'application.",
+    "resend": "Renvoyer l'e-mail au parent",
+    "resent": "E-mail envoyé au parent.",
+    "tooMany": "Trop de demandes : réessayez plus tard.",
+    "notEligible": "Aucun e-mail ne peut être envoyé pour ce compte.",
+    "unknownTitle": "Compte indisponible",
+    "unknownBody": "Impossible de charger votre profil. Réessayez ou déconnectez-vous.",
+    "refresh": "Vérifier à nouveau"
   }
 }

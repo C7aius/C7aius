@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { ALL_BELTS, beltOptions } from './belts';
+import { beltOptions } from './belts';
+import { BELTS } from './types';
 
 export function needsParentConsent(age: number, createdByParent: boolean): boolean {
   return age < 16 && !createdByParent;
@@ -21,7 +22,7 @@ export const registrationSchema = z
       .min(0, 'errors.ageRange')
       .max(100, 'errors.ageRange'),
     sports: z.array(z.enum(['jjb', 'grappling', 'mma'])).min(1, 'errors.sportRequired'),
-    bjjBelt: z.enum(ALL_BELTS as [string, ...string[]]).optional(),
+    bjjBelt: z.enum(BELTS).optional(),
     yearsGrappling: years.optional(),
     yearsMma: years.optional(),
     parentEmail: z.string().email('errors.invalidEmail').optional(),

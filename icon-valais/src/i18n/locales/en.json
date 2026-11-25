@@ -22,7 +22,11 @@
     "forgotPassword": "Forgot password?",
     "noAccount": "No account yet?",
     "haveAccount": "Already have an account?",
-    "invalidCredentials": "Incorrect email or password"
+    "invalidCredentials": "Incorrect email or password",
+    "resetTitle": "Reset password",
+    "resetSend": "Send link",
+    "resetSent": "If an account exists for this address, an email has just been sent.",
+    "backToLogin": "Back to sign in"
   },
   "signup": {
     "title": "Create an account",
@@ -31,7 +35,26 @@
     "confirmPassword": "Confirm password",
     "submit": "Sign up",
     "success": "Account created successfully",
-    "passwordMismatch": "Passwords do not match"
+    "passwordMismatch": "Passwords do not match",
+    "stepOf": "Step {{current}} of {{total}}",
+    "stepRole": "You are…",
+    "roleStudent": "Student",
+    "roleCoach": "Coach",
+    "stepIdentity": "About you",
+    "phone": "Phone (optional)",
+    "age": "Age",
+    "stepSports": "Your sports",
+    "belt": "BJJ belt",
+    "yearsGrappling": "Years of grappling",
+    "yearsMma": "Years of MMA",
+    "stepCoach": "Coach profile",
+    "coachYears": "Years of coaching experience",
+    "trainingPlaces": "Training places",
+    "competitionAwards": "Competition results",
+    "cv": "CV / background",
+    "stepParent": "Parent's email",
+    "parentHint": "You are under 16: a parent must confirm your registration by email.",
+    "parentEmail": "Parent's email"
   },
   "profile": {
     "title": "My profile",
@@ -50,13 +73,23 @@
     "blue": "Blue",
     "purple": "Purple",
     "brown": "Brown",
-    "black": "Black"
+    "black": "Black",
+    "blanche": "White",
+    "grise": "Grey",
+    "jaune": "Yellow",
+    "orange": "Orange",
+    "verte": "Green",
+    "bleue": "Blue",
+    "violette": "Purple",
+    "marron": "Brown",
+    "noire": "Black"
   },
   "sports": {
     "bjj": "Brazilian Jiu-Jitsu",
     "mma": "MMA",
     "grappling": "Grappling",
-    "boxing": "Boxing"
+    "boxing": "Boxing",
+    "jjb": "Brazilian jiu-jitsu"
   },
   "roles": {
     "member": "Member",
@@ -90,6 +123,23 @@
     "yearsRequired": "Enter years of practice",
     "yearsInvalid": "Invalid number of years",
     "parentEmailRequired": "A parent's email is required",
-    "coachYearsRequired": "Enter your years of coaching experience"
+    "coachYearsRequired": "Enter your years of coaching experience",
+    "emailTaken": "This email address is already in use",
+    "signupFailed": "Sign-up failed. Please check your details.",
+    "passwordMismatch": "Passwords do not match"
+  },
+  "pending": {
+    "profTitle": "Account awaiting approval",
+    "profBody": "An administrator must approve your coach account. You will be able to use the app once it is approved.",
+    "profRefused": "Your coach account request was declined.",
+    "minorTitle": "Parental consent required",
+    "minorBody": "A parent must confirm your registration using the email sent to them. You will then be able to use the app.",
+    "resend": "Resend email to parent",
+    "resent": "Email sent to the parent.",
+    "tooMany": "Too many requests: please try again later.",
+    "notEligible": "No email can be sent for this account.",
+    "unknownTitle": "Account unavailable",
+    "unknownBody": "Your profile could not be loaded. Try again or sign out.",
+    "refresh": "Check again"
   }
 }

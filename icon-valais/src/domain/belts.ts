@@ -1,8 +1,6 @@
-import type { Belt } from './types';
+import { BELTS, type Belt } from './types';
 
-export const ALL_BELTS: readonly Belt[] = [
-  'blanche', 'grise', 'jaune', 'orange', 'verte', 'bleue', 'violette', 'marron', 'noire',
-];
+export const ALL_BELTS: readonly Belt[] = BELTS;
 
 const KID_ONLY: readonly Belt[] = ['grise', 'jaune', 'orange', 'verte'];
 
