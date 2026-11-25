@@ -149,17 +149,21 @@ Déclarée par l'élève ; **un prof peut la modifier** sur le compte de n'impor
 
 ## 8. Abonnements et paiements
 
-| Durée | Prix | Étudiant (-30 %) |
-|---|---|---|
-| 1 mois | 100 CHF | 70 CHF |
-| 3 mois | 250 CHF | 175 CHF |
-| 6 mois | 450 CHF | 315 CHF |
-| 12 mois | 650 CHF | 455 CHF |
+| Durée | Prix | Étudiant (-30 %) | Enfant (-50 %) |
+|---|---|---|---|
+| 1 mois | 100 CHF | 70 CHF | 50 CHF |
+| 3 mois | 250 CHF | 175 CHF | 125 CHF |
+| 6 mois | 450 CHF | 315 CHF | 225 CHF |
+| 12 mois | 650 CHF | 455 CHF | 325 CHF |
+
+- Les prix de base et les pourcentages de réduction (étudiant, enfant) sont modifiables par l'admin.
+- Tarif enfant : appliqué automatiquement si l'âge < 18 ans. Réductions non cumulables (la plus avantageuse s'applique).
 
 - Renouvellement automatique (carte / Apple Pay / Google Pay via Stripe).
 - Résiliation possible dans l'app (fin à l'échéance en cours).
 - Tarif étudiant : l'élève envoie un justificatif (PDF, ou photo prise avec l'appareil photo de l'app) ; l'admin valide ; le justificatif est supprimé après décision.
 - Cours à l'unité : carte, TWINT, Apple Pay, Google Pay.
+- Remboursement : **uniquement si le cours est annulé** (remboursement automatique via Stripe). Désinscription d'un cours payé = pas de remboursement. Mention discrète affichée avant le paiement : « Remboursé uniquement en cas d'annulation du cours. »
 - Quittances PDF téléchargeables dans l'app (historique des paiements).
 
 ## 9. Classements et statistiques
@@ -186,8 +190,8 @@ E-mails techniques indispensables (gérés par Supabase) : réinitialisation du 
 ## 11. Identité visuelle
 
 - Nom : **Icon Valais**
-- Couleurs : noir anthracite et orange
-- Logo : fichier à fournir par le propriétaire
+- Couleurs : noir anthracite (#2B2B2B) et orange du logo (#FF6A00)
+- Logo : losange orange bordé de noir, « J » stylisé noir, texte « jiu-jitsu » — `docs/assets/logo-icon-valais.jpg` (capture d'écran ; une version haute définition PNG/SVG sera préférable pour l'icône de l'app)
 
 ## 12. Architecture technique
 
@@ -218,6 +222,7 @@ E-mails techniques indispensables (gérés par Supabase) : réinitialisation du 
 10. Justificatif étudiant supprimé après validation.
 11. Ceintures adultes : blanche, bleue, violette, marron, noire.
 12. Places indicatives par défaut : 20.
+13. Tarif enfant appliqué automatiquement sous 18 ans ; réductions non cumulables.
 
 ## 14. Laissé au développeur
 
