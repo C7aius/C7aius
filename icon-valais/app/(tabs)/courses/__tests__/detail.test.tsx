@@ -173,6 +173,20 @@ describe('attendance', () => {
     expect(await screen.findByText("Action impossible avant le début du cours.")).toBeTruthy();
   });
 
+  // Régression (vu dans le navigateur) : un élève sans ceinture de jjb affichait la clé brute « belts.null ».
+  it('shows no belt text for a participant without bjj belt', async () => {
+    mockRpc.mockImplementation((fn: string) =>
+      Promise.resolve({
+        data: fn === 'course_participants' ? [{ ...participants[0], bjj_belt: null }] : null,
+        error: null,
+      }),
+    );
+    await render(<CourseDetail />);
+    await screen.findByLabelText('Présent : Anna Eleve');
+    expect(screen.queryByText(/belts\./)).toBeNull();
+    expect(screen.getByText(/25 ans/)).toBeTruthy();
+  });
+
   it('no Belt button on the prof own row', async () => {
     await render(<CourseDetail />);
     await screen.findByLabelText('Présent : Anna Eleve');

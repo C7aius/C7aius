@@ -15,7 +15,7 @@ type Participant = {
   first_name: string;
   last_name: string;
   age: number;
-  bjj_belt: Belt;
+  bjj_belt: Belt | null; // null : pas de jjb (ex. inscrit en grappling seulement)
   present: boolean;
 };
 type Candidate = { id: string; first_name: string; last_name: string };
@@ -103,7 +103,8 @@ export function ParticipantsList({ courseId, selfId }: { courseId: string; selfI
             <View style={styles.who}>
               <Text style={styles.name}>{name}</Text>
               <Text style={styles.meta}>
-                {t('courses.ageYears', { age: r.age })} · {t(`belts.${r.bjj_belt}`)}
+                {t('courses.ageYears', { age: r.age })}
+                {r.bjj_belt ? ` · ${t(`belts.${r.bjj_belt}`)}` : ''}
               </Text>
             </View>
             {r.profile_id !== selfId ? (

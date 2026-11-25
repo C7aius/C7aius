@@ -60,6 +60,14 @@ describe('admin layout', () => {
     expect(screen.getByTestId('admin-stack')).toBeTruthy();
   });
 
+  // Régression : `href: null` masque la route et expo-router redirige alors vers « / » (vérifié dans le
+  // navigateur : le bouton « + » et /courses/[id] ne menaient nulle part).
+  it('keeps the courses stack navigable (not a hidden href:null tab)', async () => {
+    mockProfile = { role: 'eleve' };
+    await render(<TabsLayout />);
+    expect(screen.getByTestId('tab-courses')).toBeTruthy();
+  });
+
   it('does not register the account detail as a hidden tab', async () => {
     mockProfile = { role: 'admin' };
     await render(<TabsLayout />);

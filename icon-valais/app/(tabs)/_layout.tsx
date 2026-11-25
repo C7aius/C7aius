@@ -19,7 +19,9 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: t('tabs.courses') }} />
-      <Tabs.Screen name="courses" options={{ href: null }} />
+      {/* Pile de détail des cours : pas d'onglet visible, mais jamais `href: null` (route « masquée » =
+          redirigée vers « / » par expo-router, donc /courses/new et /courses/[id] seraient inaccessibles). */}
+      <Tabs.Screen name="courses" options={{ tabBarItemStyle: { display: 'none' } }} />
       <Tabs.Screen name="ranking/index" options={{ title: t('tabs.ranking') }} />
       <Tabs.Screen name="competition/index" options={{ title: t('tabs.competition') }} />
       <Tabs.Screen name="profile" options={{ title: t('tabs.profile') }} />
