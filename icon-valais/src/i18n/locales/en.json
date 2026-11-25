@@ -189,7 +189,19 @@
     "lastAdminDelete": "You are the last administrator: appoint another administrator before deleting your account.",
     "childProfileRole": "A child profile (without login) cannot be given a role.",
     "childMustBeMinor": "A child profile must be under 18.",
-    "ageLowerRequiresConsent": "Change refused: without parental consent, the age cannot go below 16. Contact a club administrator if your age is wrong."
+    "ageLowerRequiresConsent": "Change refused: without parental consent, the age cannot go below 16. Contact a club administrator if your age is wrong.",
+    "slotTaken": "This slot is already taken.",
+    "courseClosed": "This class is cancelled or has already started.",
+    "tooEarly": "Not possible before the class starts.",
+    "repeatTooFar": "The repeat extends too far into the future.",
+    "courseStarted": "This class has already started.",
+    "courseCancelled": "This class is cancelled.",
+    "dateInPast": "The date is in the past.",
+    "inactiveProfile": "This profile is not active.",
+    "notBooked": "This profile is not booked for this class.",
+    "invalidField": "A field is invalid.",
+    "locationArchived": "This location is archived.",
+    "noDefaultLocation": "No default location is set."
   },
   "pending": {
     "profTitle": "Account awaiting approval",
@@ -211,5 +223,32 @@
     "missingAddress": "No parent address is saved. Contact a club administrator.",
     "locked": "The parent's address can no longer be changed in the app. Contact a club administrator.",
     "deliveryFailed": "The email could not be sent. Try again later."
+  },
+  "courses": {
+    "free": "Free",
+    "prevWeek": "Previous week",
+    "nextWeek": "Next week",
+    "allLocations": "All locations",
+    "allSports": "All sports",
+    "location": "Location",
+    "level": {
+      "adulte": "Adults",
+      "enfant": "Kids"
+    },
+    "competition": "Competition",
+    "vacant": "Open slot",
+    "openMat": "Open Mat",
+    "cancelled": "Cancelled",
+    "prof": "Coach",
+    "places": "{{booked}} / {{places}} booked",
+    "priceMember": "Member: {{price}}",
+    "priceNonMember": "Non-member: {{price}}",
+    "book": "Book",
+    "unbook": "Cancel booking",
+    "bookFor": "Book for",
+    "me": "Me",
+    "openMaps": "Open in Google Maps",
+    "empty": "No classes this week.",
+    "loadError": "Could not load classes."
   }
 }

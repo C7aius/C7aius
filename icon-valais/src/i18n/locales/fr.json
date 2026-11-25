@@ -189,7 +189,19 @@
     "lastAdminDelete": "Vous êtes le dernier administrateur : nommez un autre administrateur avant de supprimer votre compte.",
     "childProfileRole": "Un profil enfant (sans connexion) ne peut pas recevoir de rôle.",
     "childMustBeMinor": "Un profil enfant doit avoir moins de 18 ans.",
-    "ageLowerRequiresConsent": "Modification refusée : sans consentement parental, l'âge ne peut pas descendre sous 16 ans. Contactez un administrateur du club si votre âge est faux."
+    "ageLowerRequiresConsent": "Modification refusée : sans consentement parental, l'âge ne peut pas descendre sous 16 ans. Contactez un administrateur du club si votre âge est faux.",
+    "slotTaken": "Ce créneau est déjà pris.",
+    "courseClosed": "Ce cours est annulé ou a déjà commencé.",
+    "tooEarly": "Action impossible avant le début du cours.",
+    "repeatTooFar": "La répétition va trop loin dans le futur.",
+    "courseStarted": "Ce cours a déjà commencé.",
+    "courseCancelled": "Ce cours est annulé.",
+    "dateInPast": "La date est dans le passé.",
+    "inactiveProfile": "Ce profil n'est pas actif.",
+    "notBooked": "Ce profil n'est pas inscrit à ce cours.",
+    "invalidField": "Un champ n'est pas valide.",
+    "locationArchived": "Ce lieu est archivé.",
+    "noDefaultLocation": "Aucun lieu par défaut n'est défini."
   },
   "pending": {
     "profTitle": "Compte en attente de validation",
@@ -211,5 +223,32 @@
     "missingAddress": "Aucune adresse de parent n'est enregistrée. Contactez un administrateur du club.",
     "locked": "L'adresse du parent ne peut plus être changée depuis l'application. Contactez un administrateur du club.",
     "deliveryFailed": "L'e-mail n'a pas pu être envoyé. Réessayez plus tard."
+  },
+  "courses": {
+    "free": "Gratuit",
+    "prevWeek": "Semaine précédente",
+    "nextWeek": "Semaine suivante",
+    "allLocations": "Tous les lieux",
+    "allSports": "Tous les sports",
+    "location": "Lieu",
+    "level": {
+      "adulte": "Adultes",
+      "enfant": "Enfants"
+    },
+    "competition": "Compétition",
+    "vacant": "Créneau libre",
+    "openMat": "Open Mat",
+    "cancelled": "Annulé",
+    "prof": "Prof",
+    "places": "{{booked}} / {{places}} inscrits",
+    "priceMember": "Adhérent : {{price}}",
+    "priceNonMember": "Non-adhérent : {{price}}",
+    "book": "Réserver",
+    "unbook": "Se désinscrire",
+    "bookFor": "Réserver pour",
+    "me": "Moi",
+    "openMaps": "Ouvrir dans Google Maps",
+    "empty": "Aucun cours cette semaine.",
+    "loadError": "Impossible de charger les cours."
   }
 }

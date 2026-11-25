@@ -1,20 +1,123 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
+import { useAuth, type Profile } from '@/src/auth/AuthProvider';
+import { CourseCard } from '@/src/components/courses/CourseCard';
+import { WeekNav } from '@/src/components/courses/WeekNav';
+import { Chip, ErrorText } from '@/src/components/ui';
+import { formatDayHeading, weekRange, zurichDayKey, type CourseRow } from '@/src/domain/courses';
+import type { Lang } from '@/src/i18n';
+import type { Sport } from '@/src/domain/types';
+import { fetchWeek } from '@/src/lib/coursesApi';
+import { supabase } from '@/src/lib/supabase';
 import { colors } from '@/src/theme';
 
+const SPORTS: Sport[] = ['jjb', 'grappling', 'mma'];
+const WEEK_MS = 7 * 24 * 3600 * 1000;
+
 export default function Courses() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const { profile } = useAuth();
+  const router = useRouter();
+  const [anchor, setAnchor] = useState(() => new Date());
+  const [rows, setRows] = useState<CourseRow[]>([]);
+  const [kids, setKids] = useState<Pick<Profile, 'id' | 'first_name'>[]>([]);
+  const [loadError, setLoadError] = useState(false);
+  const [locFilter, setLocFilter] = useState<string | null>(null);
+  const [sportFilter, setSportFilter] = useState<Sport | null>(null);
+  const [now, setNow] = useState(() => new Date());
+  const lang = (i18n.language || 'fr') as Lang;
+
+  const { from, to } = useMemo(() => weekRange(anchor), [anchor]);
+  const profileId = profile?.id;
+
+  const load = useCallback(async () => {
+    if (!profileId) return;
+    try {
+      const { data: kidRows } = await supabase.from('profiles').select('id,first_name').eq('parent_profile_id', profileId);
+      const kidList = ((kidRows ?? []) as Pick<Profile, 'id' | 'first_name'>[])
+        .slice()
+        .sort((a, b) => a.first_name.localeCompare(b.first_name));
+      setKids(kidList);
+      setRows(await fetchWeek(from, to, [profileId, ...kidList.map((k) => k.id)]));
+      setNow(new Date());
+      setLoadError(false);
+    } catch {
+      setLoadError(true);
+    }
+  }, [profileId, from, to]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
+
+  const locations = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of rows) m.set(r.location.id, r.location.name);
+    return [...m.entries()];
+  }, [rows]);
+
+  const days = useMemo(() => {
+    const groups = new Map<string, { heading: string; items: CourseRow[] }>();
+    for (const r of rows) {
+      if (locFilter && r.location_id !== locFilter) continue;
+      if (sportFilter && r.sport !== sportFilter) continue;
+      const key = zurichDayKey(r.starts_at);
+      const g = groups.get(key) ?? { heading: formatDayHeading(r.starts_at, lang), items: [] };
+      g.items.push(r);
+      groups.set(key, g);
+    }
+    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [rows, locFilter, sportFilter, lang]);
+
+  const shift = (dir: 1 | -1) => setAnchor(new Date(from.getTime() + (dir === 1 ? WEEK_MS : -WEEK_MS) + 12 * 3600 * 1000));
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{t('tabs.courses')}</Text>
-      <Text style={styles.body}>{t('tabs.emptyHere')}</Text>
-    </View>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
+      <WeekNav from={from} to={to} onPrev={() => shift(-1)} onNext={() => shift(1)} />
+      <View style={styles.filters}>
+        <Chip label={t('courses.allLocations')} selected={locFilter === null} onPress={() => setLocFilter(null)} />
+        {locations.map(([id, name]) => (
+          <Chip key={id} label={name} selected={locFilter === id} onPress={() => setLocFilter(id)} />
+        ))}
+      </View>
+      <View style={styles.filters}>
+        <Chip label={t('courses.allSports')} selected={sportFilter === null} onPress={() => setSportFilter(null)} />
+        {SPORTS.map((s) => (
+          <Chip key={s} label={t(`sports.${s}`)} selected={sportFilter === s} onPress={() => setSportFilter(s)} />
+        ))}
+      </View>
+      <ErrorText>{loadError ? t('courses.loadError') : undefined}</ErrorText>
+      {!loadError && days.length === 0 ? <Text style={styles.empty}>{t('courses.empty')}</Text> : null}
+      {days.map(([key, g]) => (
+        <View key={key}>
+          <Text style={styles.day}>{g.heading}</Text>
+          {g.items.map((c) => (
+            <CourseCard
+              key={c.id}
+              course={c}
+              now={now}
+              lang={lang}
+              selfId={profileId ?? ''}
+              kids={kids}
+              onOpen={() => router.push(`/courses/${c.id}` as never)}
+              onChanged={() => void load()}
+            />
+          ))}
+        </View>
+      ))}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.anthracite, padding: 24 },
-  title: { color: colors.orange, fontSize: 24, fontWeight: '700', marginBottom: 8 },
-  body: { color: colors.white, textAlign: 'center' },
+  screen: { flex: 1, backgroundColor: colors.anthracite },
+  container: { padding: 16, paddingTop: 60 },
+  filters: { flexDirection: 'row', flexWrap: 'wrap' },
+  day: { color: colors.orange, fontSize: 18, fontWeight: '700', marginTop: 12, marginBottom: 8 },
+  empty: { color: colors.white, textAlign: 'center', marginTop: 24 },
 });

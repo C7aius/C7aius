@@ -189,7 +189,19 @@
     "lastAdminDelete": "Sie sind der letzte Administrator: Ernennen Sie einen anderen Administrator, bevor Sie Ihr Konto löschen.",
     "childProfileRole": "Einem Kinderprofil (ohne Login) kann keine Rolle zugewiesen werden.",
     "childMustBeMinor": "Ein Kinderprofil muss unter 18 Jahre alt sein.",
-    "ageLowerRequiresConsent": "Änderung abgelehnt: Ohne Zustimmung der Eltern kann das Alter nicht unter 16 Jahre gesenkt werden. Wenden Sie sich an einen Administrator des Clubs, falls Ihr Alter falsch ist."
+    "ageLowerRequiresConsent": "Änderung abgelehnt: Ohne Zustimmung der Eltern kann das Alter nicht unter 16 Jahre gesenkt werden. Wenden Sie sich an einen Administrator des Clubs, falls Ihr Alter falsch ist.",
+    "slotTaken": "Dieser Termin ist bereits vergeben.",
+    "courseClosed": "Dieser Kurs ist abgesagt oder hat bereits begonnen.",
+    "tooEarly": "Vor Kursbeginn nicht möglich.",
+    "repeatTooFar": "Die Wiederholung reicht zu weit in die Zukunft.",
+    "courseStarted": "Dieser Kurs hat bereits begonnen.",
+    "courseCancelled": "Dieser Kurs ist abgesagt.",
+    "dateInPast": "Das Datum liegt in der Vergangenheit.",
+    "inactiveProfile": "Dieses Profil ist nicht aktiv.",
+    "notBooked": "Dieses Profil ist nicht für den Kurs angemeldet.",
+    "invalidField": "Ein Feld ist ungültig.",
+    "locationArchived": "Dieser Ort ist archiviert.",
+    "noDefaultLocation": "Es ist kein Standardort festgelegt."
   },
   "pending": {
     "profTitle": "Konto wartet auf Freigabe",
@@ -211,5 +223,32 @@
     "missingAddress": "Es ist keine Adresse eines Elternteils gespeichert. Wenden Sie sich an einen Administrator des Clubs.",
     "locked": "Die Adresse des Elternteils kann in der App nicht mehr geändert werden. Wenden Sie sich an einen Administrator des Clubs.",
     "deliveryFailed": "Die E-Mail konnte nicht gesendet werden. Versuchen Sie es später erneut."
+  },
+  "courses": {
+    "free": "Gratis",
+    "prevWeek": "Vorherige Woche",
+    "nextWeek": "Nächste Woche",
+    "allLocations": "Alle Orte",
+    "allSports": "Alle Sportarten",
+    "location": "Ort",
+    "level": {
+      "adulte": "Erwachsene",
+      "enfant": "Kinder"
+    },
+    "competition": "Wettkampf",
+    "vacant": "Freier Platz",
+    "openMat": "Open Mat",
+    "cancelled": "Abgesagt",
+    "prof": "Trainer",
+    "places": "{{booked}} / {{places}} angemeldet",
+    "priceMember": "Mitglied: {{price}}",
+    "priceNonMember": "Nichtmitglied: {{price}}",
+    "book": "Buchen",
+    "unbook": "Abmelden",
+    "bookFor": "Buchen für",
+    "me": "Ich",
+    "openMaps": "In Google Maps öffnen",
+    "empty": "Keine Kurse in dieser Woche.",
+    "loadError": "Die Kurse konnten nicht geladen werden."
   }
 }
