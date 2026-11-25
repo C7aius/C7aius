@@ -12,6 +12,12 @@ export type OutboxRow = {
   kind: OutboxKind;
   course_id: string | null;
   payload: Record<string, unknown>;
+  // renvoyés par claim_outbox (facultatifs)
+  attempts?: number;
+  language?: string | null;
+  sport?: string | null;
+  starts_at?: string | null;
+  child_first_name?: string | null;
 };
 
 export type ExpoMessage = {
@@ -30,72 +36,137 @@ export type ExpoTicket =
 export const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 export const EXPO_BATCH = 100;
 export const OUTBOX_BATCH = 500;
+export const CLUB_TIME_ZONE = 'Europe/Zurich';
 
-const TEXTS: Record<Lang, Record<OutboxKind, { title: string; body: string }>> = {
+export type PushContext = { sport?: string | null; startsAt?: string | null; childName?: string | null };
+
+const LOCALES: Record<Lang, string> = { fr: 'fr-CH', de: 'de-CH', en: 'en-GB', ru: 'ru-RU' };
+
+// Mêmes libellés que src/i18n/locales/*.json (sports).
+const SPORTS: Record<Lang, Record<string, string>> = {
+  fr: { jjb: 'Jiu-jitsu brésilien', grappling: 'Grappling', mma: 'MMA' },
+  de: { jjb: 'Brasilianisches Jiu-Jitsu', grappling: 'Grappling', mma: 'MMA' },
+  en: { jjb: 'Brazilian jiu-jitsu', grappling: 'Grappling', mma: 'MMA' },
+  ru: { jjb: 'Бразильское джиу-джитсу', grappling: 'Грэпплинг', mma: 'ММА' },
+};
+
+// « Jiu-jitsu brésilien, jeudi 3 décembre à 14:30 » (heure de Zurich), ou null.
+function courseLabel(lang: Lang, ctx: PushContext): string | null {
+  const parts: string[] = [];
+  if (ctx.sport) parts.push(SPORTS[lang][ctx.sport] ?? ctx.sport);
+  if (ctx.startsAt) {
+    const d = new Date(ctx.startsAt);
+    if (!Number.isNaN(d.getTime())) {
+      parts.push(
+        new Intl.DateTimeFormat(LOCALES[lang], {
+          timeZone: CLUB_TIME_ZONE,
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          hour: '2-digit',
+          minute: '2-digit',
+        }).format(d),
+      );
+    }
+  }
+  return parts.length ? parts.join(', ') : null;
+}
+
+type Body = (course: string | null, child: string | null) => string;
+
+const TEXTS: Record<Lang, Record<OutboxKind, { title: string; body: Body }>> = {
   fr: {
     slot_vacant: {
-      title: 'Créneau sans prof',
-      body: 'Un cours des prochaines 24 h n\'a pas encore de professeur. Ouvrez l\'application pour le prendre.',
+      title: 'Cours sans professeur',
+      body: (c) =>
+        c
+          ? `${c} : ce cours n'a pas encore de professeur. Ouvrez l'application pour le prendre.`
+          : 'Un cours des prochaines 24 h n\'a pas encore de professeur. Ouvrez l\'application pour le prendre.',
     },
     prof_validated: {
       title: 'Compte professeur validé',
-      body: 'Votre compte professeur a été validé. Vous pouvez maintenant donner des cours.',
+      body: () => 'Votre compte professeur a été validé. Vous pouvez maintenant donner des cours.',
     },
     course_cancelled: {
       title: 'Cours annulé',
-      body: 'Un cours auquel vous êtes inscrit a été annulé.',
+      body: (c, k) =>
+        k
+          ? c ? `Le cours de ${k} (${c}) est annulé.` : `Un cours de ${k} a été annulé.`
+          : c ? `Votre cours (${c}) est annulé.` : 'Un cours auquel vous êtes inscrit a été annulé.',
     },
   },
   de: {
     slot_vacant: {
       title: 'Kurs ohne Trainer',
-      body: 'Ein Kurs in den nächsten 24 Stunden hat noch keinen Trainer. Öffnen Sie die App, um ihn zu übernehmen.',
+      body: (c) =>
+        c
+          ? `${c}: Dieser Kurs hat noch keinen Trainer. Öffnen Sie die App, um ihn zu übernehmen.`
+          : 'Ein Kurs in den nächsten 24 Stunden hat noch keinen Trainer. Öffnen Sie die App, um ihn zu übernehmen.',
     },
     prof_validated: {
       title: 'Trainerkonto bestätigt',
-      body: 'Ihr Trainerkonto wurde bestätigt. Sie können jetzt Kurse geben.',
+      body: () => 'Ihr Trainerkonto wurde bestätigt. Sie können jetzt Kurse geben.',
     },
     course_cancelled: {
       title: 'Kurs abgesagt',
-      body: 'Ein Kurs, für den Sie angemeldet sind, wurde abgesagt.',
+      body: (c, k) =>
+        k
+          ? c ? `Der Kurs von ${k} (${c}) wurde abgesagt.` : `Ein Kurs von ${k} wurde abgesagt.`
+          : c ? `Ihr Kurs (${c}) wurde abgesagt.` : 'Ein Kurs, für den Sie angemeldet sind, wurde abgesagt.',
     },
   },
   en: {
     slot_vacant: {
       title: 'Class without an instructor',
-      body: 'A class in the next 24 hours has no instructor yet. Open the app to take it.',
+      body: (c) =>
+        c
+          ? `${c}: this class has no instructor yet. Open the app to take it.`
+          : 'A class in the next 24 hours has no instructor yet. Open the app to take it.',
     },
     prof_validated: {
       title: 'Instructor account approved',
-      body: 'Your instructor account has been approved. You can now teach classes.',
+      body: () => 'Your instructor account has been approved. You can now teach classes.',
     },
     course_cancelled: {
       title: 'Class cancelled',
-      body: 'A class you are booked on has been cancelled.',
+      body: (c, k) =>
+        k
+          ? c ? `${k}'s class (${c}) has been cancelled.` : `One of ${k}'s classes has been cancelled.`
+          : c ? `Your class (${c}) has been cancelled.` : 'A class you are booked on has been cancelled.',
     },
   },
   ru: {
     slot_vacant: {
       title: 'Занятие без тренера',
-      body: 'У занятия в ближайшие 24 часа пока нет тренера. Откройте приложение, чтобы взять его.',
+      body: (c) =>
+        c
+          ? `${c}: у этого занятия пока нет тренера. Откройте приложение, чтобы взять его.`
+          : 'У занятия в ближайшие 24 часа пока нет тренера. Откройте приложение, чтобы взять его.',
     },
     prof_validated: {
       title: 'Аккаунт тренера подтверждён',
-      body: 'Ваш аккаунт тренера подтверждён. Теперь вы можете вести занятия.',
+      body: () => 'Ваш аккаунт тренера подтверждён. Теперь вы можете вести занятия.',
     },
     course_cancelled: {
       title: 'Занятие отменено',
-      body: 'Занятие, на которое вы записаны, отменено.',
+      body: (c, k) =>
+        k
+          ? c ? `Занятие (${k}, ${c}) отменено.` : `Занятие (${k}) отменено.`
+          : c ? `Ваше занятие (${c}) отменено.` : 'Занятие, на которое вы записаны, отменено.',
     },
   },
 };
 
-export function pushText(lang: Lang, kind: OutboxKind): { title: string; body: string } {
-  return TEXTS[normalizeLang(lang)][kind];
+export function pushText(lang: Lang, kind: OutboxKind, ctx: PushContext = {}): { title: string; body: string } {
+  const l = normalizeLang(lang);
+  const t = TEXTS[l][kind];
+  const child = ctx.childName?.trim().slice(0, 50) || null;
+  return { title: t.title, body: t.body(courseLabel(l, ctx), child) };
 }
 
 // Un message par jeton du destinataire ; destinataire sans jeton → aucun message.
-// Langue : profiles.language, à défaut 'fr'.
+// Langue : profiles.language, à défaut 'fr'. Texte : sport, date et heure locales
+// du cours, prénom de l'enfant (notification reçue par le parent).
 export function buildPushMessages(
   rows: OutboxRow[],
   tokens: Map<string, string[]>,
@@ -103,7 +174,11 @@ export function buildPushMessages(
 ): ExpoMessage[] {
   const out: ExpoMessage[] = [];
   for (const r of rows) {
-    const { title, body } = pushText(normalizeLang(langs.get(r.profile_id)), r.kind);
+    const { title, body } = pushText(normalizeLang(langs.get(r.profile_id)), r.kind, {
+      sport: r.sport,
+      startsAt: r.starts_at,
+      childName: r.child_first_name,
+    });
     for (const to of tokens.get(r.profile_id) ?? []) {
       out.push({ to, title, body, data: { courseId: r.course_id }, sound: 'default' });
     }
@@ -122,6 +197,7 @@ export type TicketSummary = {
   sent: number[]; // lignes à marquer sent_at
   errors: { id: number; error: string }[]; // lignes à marquer error
   deadTokens: string[]; // jetons DeviceNotRegistered à supprimer
+  pending: number[]; // lignes à réessayer (réservation libérée)
 };
 
 // rowIds : toutes les lignes traitées ; owners[i] / tos[i] / tickets[i] : ligne,
@@ -153,12 +229,14 @@ export function summarizeTickets(
   });
   const sent: number[] = [];
   const errors: { id: number; error: string }[] = [];
+  const pending: number[] = [];
   for (const [id, s] of state) {
     if (!s.any) errors.push({ id, error: 'no_push_token' });
     else if (s.ok) sent.push(id);
-    else if (!s.pending) errors.push({ id, error: s.error ?? 'expo_error' });
+    else if (s.pending) pending.push(id);
+    else errors.push({ id, error: s.error ?? 'expo_error' });
   }
-  return { sent, errors, deadTokens: [...dead] };
+  return { sent, errors, deadTokens: [...dead], pending };
 }
 
 // Comparaison en temps constant (longueurs égales).
@@ -184,16 +262,51 @@ export function isServiceRoleRequest(authorization: string | null, serviceKey: s
 export type SendPushDeps = {
   serviceKey: string | undefined;
   expoAccessToken?: string;
-  loadPending(limit: number): Promise<OutboxRow[]>;
+  // claim_outbox : réserve et renvoie jusqu'à `limit` lignes (avec langue, sport, début, prénom de l'enfant)
+  claim(limit: number): Promise<OutboxRow[]>;
   loadTokens(profileIds: string[]): Promise<{ token: string; profile_id: string }[]>;
-  loadLangs(profileIds: string[]): Promise<{ id: string; language: string | null }[]>;
   markSent(ids: number[]): Promise<void>;
   markError(ids: number[], error: string): Promise<void>;
+  releaseClaims(ids: number[]): Promise<void>;
   deleteTokens(tokens: string[]): Promise<void>;
   fetch: typeof fetch;
 };
 
 export type SendPushResult = { status: number; body: Record<string, unknown> };
+
+// Envoie un paquet ; ticket null = à réessayer plus tard (réseau, 5xx, 429,
+// réponse illisible). Un paquet refusé en 4xx est renvoyé message par message,
+// pour qu'un seul message invalide ne fasse pas échouer les autres.
+async function sendBatch(part: ExpoMessage[], deps: SendPushDeps): Promise<(ExpoTicket | null)[]> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
+  if (deps.expoAccessToken) headers.Authorization = `Bearer ${deps.expoAccessToken}`;
+  let res: Response;
+  try {
+    res = await deps.fetch(EXPO_PUSH_URL, { method: 'POST', headers, body: JSON.stringify(part) });
+  } catch (e) {
+    console.error('expo push: fetch failed', e instanceof Error ? e.message : 'unknown');
+    return part.map(() => null);
+  }
+  if (res.ok) {
+    try {
+      const data = (await res.json())?.data;
+      if (Array.isArray(data) && data.length === part.length) return data as ExpoTicket[];
+    } catch {
+      // réponse illisible
+    }
+    console.error('expo push: unexpected response shape');
+    return part.map(() => null);
+  }
+  console.error('expo push: http', res.status);
+  await res.body?.cancel();
+  if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+    if (part.length === 1) return [{ status: 'error', details: { error: `http_${res.status}` } }];
+    const out: (ExpoTicket | null)[] = [];
+    for (const m of part) out.push(...(await sendBatch([m], deps)));
+    return out;
+  }
+  return part.map(() => null);
+}
 
 export async function handleSendPush(req: Request, deps: SendPushDeps): Promise<SendPushResult> {
   if (req.method !== 'POST') return { status: 405, body: { error: 'method not allowed' } };
@@ -201,7 +314,7 @@ export async function handleSendPush(req: Request, deps: SendPushDeps): Promise<
     return { status: 401, body: { error: 'unauthorized' } };
   }
 
-  const rows = await deps.loadPending(OUTBOX_BATCH);
+  const rows = await deps.claim(OUTBOX_BATCH);
   if (rows.length === 0) return { status: 200, body: { processed: 0, sent: 0, failed: 0, pending: 0 } };
 
   const profileIds = [...new Set(rows.map((r) => r.profile_id))];
@@ -210,7 +323,7 @@ export async function handleSendPush(req: Request, deps: SendPushDeps): Promise<
     tokens.set(t.profile_id, [...(tokens.get(t.profile_id) ?? []), t.token]);
   }
   const langs = new Map<string, Lang>();
-  for (const p of await deps.loadLangs(profileIds)) langs.set(p.id, normalizeLang(p.language));
+  for (const r of rows) langs.set(r.profile_id, normalizeLang(r.language));
 
   const messages: ExpoMessage[] = [];
   const owners: number[] = [];
@@ -222,31 +335,14 @@ export async function handleSendPush(req: Request, deps: SendPushDeps): Promise<
   }
 
   const tickets: (ExpoTicket | null)[] = [];
-  for (const part of chunk(messages, EXPO_BATCH)) {
-    let got: ExpoTicket[] | null = null;
-    try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
-      if (deps.expoAccessToken) headers.Authorization = `Bearer ${deps.expoAccessToken}`;
-      const res = await deps.fetch(EXPO_PUSH_URL, { method: 'POST', headers, body: JSON.stringify(part) });
-      if (res.ok) {
-        const data = (await res.json())?.data;
-        if (Array.isArray(data) && data.length === part.length) got = data as ExpoTicket[];
-        else console.error('expo push: unexpected response shape');
-      } else {
-        console.error('expo push: http', res.status);
-        await res.body?.cancel();
-      }
-    } catch (e) {
-      console.error('expo push: fetch failed', e instanceof Error ? e.message : 'unknown');
-    }
-    tickets.push(...(got ?? part.map(() => null)));
-  }
+  for (const part of chunk(messages, EXPO_BATCH)) tickets.push(...(await sendBatch(part, deps)));
 
   const s = summarizeTickets(rows.map((r) => r.id), owners, messages.map((m) => m.to), tickets);
   if (s.sent.length) await deps.markSent(s.sent);
   const byError = new Map<string, number[]>();
   for (const e of s.errors) byError.set(e.error, [...(byError.get(e.error) ?? []), e.id]);
   for (const [error, ids] of byError) await deps.markError(ids, error);
+  if (s.pending.length) await deps.releaseClaims(s.pending);
   if (s.deadTokens.length) await deps.deleteTokens(s.deadTokens);
 
   return {
@@ -255,7 +351,7 @@ export async function handleSendPush(req: Request, deps: SendPushDeps): Promise<
       processed: rows.length,
       sent: s.sent.length,
       failed: s.errors.length,
-      pending: rows.length - s.sent.length - s.errors.length,
+      pending: s.pending.length,
       removedTokens: s.deadTokens.length,
     },
   };

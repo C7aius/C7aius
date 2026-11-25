@@ -330,6 +330,8 @@ export type Database = {
       };
       notification_outbox: {
         Row: {
+          attempts: number;
+          claimed_at: string | null;
           course_id: string | null;
           created_at: string | null;
           error: string | null;
@@ -341,6 +343,8 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
+          attempts?: number;
+          claimed_at?: string | null;
           course_id?: string | null;
           created_at?: string | null;
           error?: string | null;
@@ -351,6 +355,8 @@ export type Database = {
           sent_at?: string | null;
         };
         Update: {
+          attempts?: number;
+          claimed_at?: string | null;
           course_id?: string | null;
           created_at?: string | null;
           error?: string | null;
@@ -631,6 +637,21 @@ export type Database = {
       book_course: { Args: { p_course: string; p_profile?: string }; Returns: string };
       cancel_course: { Args: { p_course: string; p_scope: string }; Returns: number };
       check_parent_consent: { Args: { p_token: string }; Returns: boolean };
+      claim_outbox: {
+        Args: { p_limit: number };
+        Returns: {
+          attempts: number;
+          child_first_name: string;
+          course_id: string;
+          id: number;
+          kind: string;
+          language: string;
+          payload: Json;
+          profile_id: string;
+          sport: string;
+          starts_at: string;
+        }[];
+      };
       confirm_parent_consent: { Args: { p_token: string }; Returns: boolean };
       course_participants: {
         Args: { p_course: string };

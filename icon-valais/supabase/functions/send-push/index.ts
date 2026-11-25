@@ -1,8 +1,10 @@
 // POST (service role uniquement, appelée chaque minute par pg_cron via pg_net) :
 // envoie les notifications en attente de notification_outbox par Expo Push.
-// Jusqu'à 500 lignes par appel, paquets de 100 ; sent_at ou error renseigné ;
-// jetons DeviceNotRegistered supprimés. Optionnel : EXPO_ACCESS_TOKEN (si la
-// sécurité renforcée des notifications push est activée sur le projet Expo).
+// Jusqu'à 500 lignes réservées par appel (claim_outbox), paquets de 100 ;
+// sent_at ou error renseigné ; lignes non envoyées (Expo injoignable) libérées
+// pour la minute suivante ; jetons DeviceNotRegistered supprimés. Optionnel :
+// EXPO_ACCESS_TOKEN (si la sécurité renforcée des notifications push est
+// activée sur le projet Expo).
 // Ne journalise ni ne renvoie jamais de jeton push ni de clé.
 import { corsHeaders, json, serviceClient } from '../_shared/http.ts';
 import { chunk, handleSendPush, type OutboxRow } from '../_shared/push.ts';
@@ -22,15 +24,11 @@ Deno.serve(async (req) => {
     const res = await handleSendPush(req, {
       serviceKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
       expoAccessToken: Deno.env.get('EXPO_ACCESS_TOKEN') || undefined,
-      async loadPending(limit) {
-        const { data, error } = await db
-          .from('notification_outbox')
-          .select('id, profile_id, kind, course_id, payload')
-          .is('sent_at', null)
-          .is('error', null)
-          .order('created_at', { ascending: true })
-          .limit(limit);
-        fail('outbox lookup failed', error);
+      // réservation atomique (SKIP LOCKED) : deux exécutions qui se chevauchent
+      // n'envoient jamais la même ligne
+      async claim(limit) {
+        const { data, error } = await db.rpc('claim_outbox', { p_limit: limit });
+        fail('outbox claim failed', error);
         return (data ?? []) as OutboxRow[];
       },
       async loadTokens(profileIds) {
@@ -42,15 +40,6 @@ Deno.serve(async (req) => {
         }
         return out;
       },
-      async loadLangs(profileIds) {
-        const out: { id: string; language: string | null }[] = [];
-        for (const ids of chunk(profileIds, IN_BATCH)) {
-          const { data, error } = await db.from('profiles').select('id, language').in('id', ids);
-          fail('profile lookup failed', error);
-          out.push(...(data ?? []));
-        }
-        return out;
-      },
       async markSent(ids) {
         const { error } = await db.from('notification_outbox').update({ sent_at: new Date().toISOString() }).in('id', ids);
         fail('could not mark sent', error);
@@ -58,6 +47,10 @@ Deno.serve(async (req) => {
       async markError(ids, message) {
         const { error } = await db.from('notification_outbox').update({ error: message }).in('id', ids);
         fail('could not mark error', error);
+      },
+      async releaseClaims(ids) {
+        const { error } = await db.from('notification_outbox').update({ claimed_at: null }).in('id', ids);
+        fail('could not release claims', error);
       },
       async deleteTokens(tokens) {
         for (const part of chunk(tokens, IN_BATCH)) {

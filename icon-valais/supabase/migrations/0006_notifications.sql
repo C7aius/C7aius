@@ -18,6 +18,11 @@
 --  * pg_cron : process-course-schedule (*/5 min) et send-push (chaque minute,
 --    via pg_net ; URL et clé lues dans Vault : functions_url,
 --    service_role_key ; absentes → rien).
+--  * claim_outbox (service_role) : réserve les lignes à envoyer (SKIP LOCKED,
+--    réservation valable 5 min), plafond de 5 tentatives (max_attempts),
+--    notifications de cours déjà commencé expirées (expired).
+--  * admin_set_role (0004) redéfinie : promotion en prof validé →
+--    prof_validated.
 --
 -- HINTs stables : invalid_push_token, invalid_field.
 -- =============================================================================
@@ -30,7 +35,9 @@ create table public.notification_outbox (
   payload    jsonb not null default '{}',
   created_at timestamptz default now(),
   sent_at    timestamptz null,
-  error      text null
+  error      text null,
+  attempts   int not null default 0,   -- réservations par claim_outbox
+  claimed_at timestamptz null          -- dernière réservation (send-push en cours)
 );
 
 create index notification_outbox_pending_idx on public.notification_outbox (created_at) where sent_at is null;
@@ -102,7 +109,8 @@ grant select, insert, update, delete on public.push_tokens to service_role;
 
 -- register_push_token(p_token, p_platform) : compte connecté (même inactif :
 -- un prof en attente doit recevoir prof_validated). Upsert : un jeton déjà
--- connu change de propriétaire (appareil passé à un autre compte).
+-- connu change de propriétaire (appareil passé à un autre compte). Préfixes
+-- ExponentPushToken[ et ExpoPushToken[. Au plus 10 jetons par profil.
 create function public.register_push_token(p_token text, p_platform text) returns void
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -111,8 +119,8 @@ begin
   if v_me is null then
     raise exception 'register_push_token: profile required' using errcode = '42501';
   end if;
-  if p_token is null or length(p_token) > 255
-     or left(p_token, 18) <> 'ExponentPushToken[' or right(p_token, 1) <> ']' then
+  if p_token is null or length(p_token) > 255 or right(p_token, 1) <> ']'
+     or not (starts_with(p_token, 'ExponentPushToken[') or starts_with(p_token, 'ExpoPushToken[')) then
     raise exception 'register_push_token: invalid Expo push token'
       using errcode = '22023', hint = 'invalid_push_token';
   end if;
@@ -121,12 +129,21 @@ begin
       using errcode = '22023', hint = 'invalid_field';
   end if;
 
+  -- clock_timestamp() : ordre exact même dans une seule transaction
   insert into public.push_tokens (token, profile_id, platform, updated_at)
-  values (p_token, v_me, p_platform, now())
+  values (p_token, v_me, p_platform, clock_timestamp())
   on conflict (token) do update
     set profile_id = excluded.profile_id,
         platform   = excluded.platform,
         updated_at = excluded.updated_at;
+
+  -- au plus 10 jetons par profil : les plus anciens sont supprimés
+  delete from public.push_tokens
+   where profile_id = v_me
+     and token not in (select token from public.push_tokens
+                        where profile_id = v_me
+                        order by updated_at desc, token desc
+                        limit 10);
 end;
 $$;
 
@@ -198,6 +215,112 @@ begin
   end if;
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- admin_set_role (0004) : en plus, passage à l'état « prof validé » (role prof
+-- et prof_status valide, alors qu'il ne l'était pas) → ligne prof_validated.
+-- ---------------------------------------------------------------------------
+create or replace function public.admin_set_role(p_profile uuid, p_role public.user_role) returns void
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_target public.profiles;
+  v_after  public.profiles;
+begin
+  if not public.is_admin() then
+    raise exception 'admin_set_role: admin required' using errcode = '42501';
+  end if;
+  -- verrouille les admins : deux rétrogradations concurrentes ne peuvent pas
+  -- supprimer ensemble les deux derniers admins
+  perform 1 from public.profiles where role = 'admin' for update;
+  select * into v_target from public.profiles where id = p_profile for update;
+  if v_target.id is null then
+    raise exception 'admin_set_role: profile not found' using errcode = 'P0002';
+  end if;
+  if v_target.auth_user_id is null then
+    raise exception 'admin_set_role: a child profile has no login and no role'
+      using errcode = '42501', hint = 'child_profile_role';
+  end if;
+  if v_target.role = 'admin' and p_role <> 'admin'
+     and not exists (select 1 from public.profiles where role = 'admin' and id <> p_profile) then
+    raise exception 'admin_set_role: cannot demote the last admin'
+      using errcode = '42501', hint = 'last_admin';
+  end if;
+  update public.profiles
+     set role = p_role,
+         prof_status = case
+           when p_role = 'prof' then coalesce(prof_status, 'valide')
+           when p_role = 'eleve' then null
+           else prof_status
+         end
+   where id = p_profile
+  returning * into v_after;
+  if v_after.role = 'prof' and v_after.prof_status = 'valide'
+     and not (v_target.role = 'prof' and v_target.prof_status = 'valide') then
+    perform public.notify_profile(p_profile, 'prof_validated', null);
+  end if;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- claim_outbox(p_limit) : appelée par send-push (service_role). Parmi les
+-- lignes ni envoyées ni en erreur, et non réservées (ou réservation de plus
+-- de 5 min, send-push interrompue) :
+--  * 5 tentatives déjà faites → error 'max_attempts' ;
+--  * slot_vacant / course_cancelled d'un cours déjà commencé → error 'expired' ;
+--  * les p_limit plus anciennes restantes sont réservées (claimed_at = now(),
+--    attempts + 1 ; FOR UPDATE SKIP LOCKED : deux appels concurrents ne
+--    réservent jamais la même ligne) et renvoyées avec la langue du
+--    destinataire, le sport et le début du cours, le prénom de l'enfant.
+-- ---------------------------------------------------------------------------
+create function public.claim_outbox(p_limit int)
+returns table (
+  id bigint, profile_id uuid, kind text, course_id uuid, payload jsonb, attempts int,
+  language text, sport text, starts_at timestamptz, child_first_name text
+)
+language plpgsql security definer set search_path = '' as $$
+begin
+  update public.notification_outbox o
+     set error = 'max_attempts'
+   where o.sent_at is null and o.error is null
+     and (o.claimed_at is null or o.claimed_at < now() - interval '5 minutes')
+     and o.attempts >= 5;
+
+  update public.notification_outbox o
+     set error = 'expired'
+    from public.courses c
+   where c.id = o.course_id
+     and o.sent_at is null and o.error is null
+     and (o.claimed_at is null or o.claimed_at < now() - interval '5 minutes')
+     and o.kind in ('slot_vacant', 'course_cancelled')
+     and c.starts_at <= now();
+
+  return query
+  with picked as (
+    select o.id from public.notification_outbox o
+     where o.sent_at is null and o.error is null
+       and (o.claimed_at is null or o.claimed_at < now() - interval '5 minutes')
+     order by o.created_at, o.id
+     limit greatest(coalesce(p_limit, 0), 0)
+     for update skip locked
+  ), claimed as (
+    update public.notification_outbox o
+       set claimed_at = now(), attempts = o.attempts + 1
+      from picked
+     where o.id = picked.id
+    returning o.*
+  )
+  select cl.id, cl.profile_id, cl.kind, cl.course_id, cl.payload, cl.attempts,
+         p.language::text, c.sport::text, c.starts_at, ch.first_name
+    from claimed cl
+    join public.profiles p on p.id = cl.profile_id
+    left join public.courses c on c.id = cl.course_id
+    left join public.profiles ch on ch.id = (cl.payload->>'child_profile_id')::uuid
+   order by cl.created_at, cl.id;
+end;
+$$;
+
+revoke all on function public.claim_outbox(int) from public, anon, authenticated;
+grant execute on function public.claim_outbox(int) to service_role;
 
 -- ---------------------------------------------------------------------------
 -- invoke_send_push() : appelée par pg_cron chaque minute. S'il reste des

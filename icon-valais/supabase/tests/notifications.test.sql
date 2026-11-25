@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(50);
+select plan(72);
 
 create temp table ids (k text primary key, v uuid);
 grant all on ids to authenticated, service_role;
@@ -65,6 +65,7 @@ select pg_temp.signup('b2000000-0000-0000-0000-0000000000b2', 'np2@t.ch', '{"fir
 select pg_temp.signup('bd000000-0000-0000-0000-0000000000bd', 'npq@t.ch', '{"first_name":"Pend","last_name":"Ing","age":30,"sports":["jjb"],"coach_years":1,"role":"prof"}');
 select pg_temp.signup('bf000000-0000-0000-0000-0000000000bf', 'npr@t.ch', '{"first_name":"Ref","last_name":"Used","age":30,"sports":["jjb"],"coach_years":1,"role":"prof"}');
 select pg_temp.signup('51000000-0000-0000-0000-000000000051', 'ns1@t.ch', '{"first_name":"Sam","last_name":"One","age":25,"sports":["jjb"]}');
+select pg_temp.signup('e1000000-0000-0000-0000-0000000000e1', 'ne1@t.ch', '{"first_name":"Eve","last_name":"Promo","age":28,"sports":["jjb"]}');
 update public.profiles set role = 'admin' where auth_user_id = 'a0000000-0000-0000-0000-00000000000a';
 update public.profiles set prof_status = 'valide'
  where auth_user_id in ('b1000000-0000-0000-0000-0000000000b1', 'b2000000-0000-0000-0000-0000000000b2');
@@ -76,7 +77,8 @@ insert into ids values
   ('p2', pg_temp.pid('b2000000-0000-0000-0000-0000000000b2')),
   ('pq', pg_temp.pid('bd000000-0000-0000-0000-0000000000bd')),
   ('pr', pg_temp.pid('bf000000-0000-0000-0000-0000000000bf')),
-  ('s1', pg_temp.pid('51000000-0000-0000-0000-000000000051'));
+  ('s1', pg_temp.pid('51000000-0000-0000-0000-000000000051')),
+  ('e1', pg_temp.pid('e1000000-0000-0000-0000-0000000000e1'));
 
 -- v23 : vacant dans 23 h ; v25 : vacant dans 25 h ; vgo : vacant commencé il y a 1 min ;
 -- pgo : avec prof, commencé il y a 1 min ; p23 : avec prof dans 23 h ;
@@ -189,6 +191,19 @@ reset role;
 select is((select count(*)::int from public.notification_outbox where kind = 'prof_validated'), 1,
           'non-admin : aucune ligne');
 
+-- admin_set_role : élève promu prof (prof_status → valide) → prof_validated, une seule fois
+select pg_temp.login('a0000000-0000-0000-0000-00000000000a');
+select public.admin_set_role(pg_temp.k('e1'), 'prof');
+reset role;
+select is((select count(*)::int from public.notification_outbox where kind = 'prof_validated' and profile_id = pg_temp.k('e1')),
+          1, 'admin_set_role élève → prof : une ligne prof_validated');
+select pg_temp.login('a0000000-0000-0000-0000-00000000000a');
+select public.admin_set_role(pg_temp.k('e1'), 'prof');
+select public.admin_set_role(pg_temp.k('pr'), 'prof');
+reset role;
+select is((select count(*)::int from public.notification_outbox where kind = 'prof_validated'), 2,
+          'admin_set_role : déjà prof validé, ou prof refusé (reste refusé) : aucune nouvelle ligne');
+
 -- ---------------------------------------------------------------------------
 -- push_tokens / register_push_token
 -- ---------------------------------------------------------------------------
@@ -226,6 +241,19 @@ delete from public.push_tokens where token = 'ExponentPushToken[aaa]';
 reset role;
 select is((select count(*)::int from public.push_tokens), 0, 'p1 supprime son jeton');
 
+-- préfixe ExpoPushToken[ accepté ; au plus 10 jetons par profil (le plus ancien est supprimé)
+select pg_temp.login('51000000-0000-0000-0000-000000000051');
+select lives_ok($$ select public.register_push_token('ExpoPushToken[new-style]', 'ios') $$, 'préfixe ExpoPushToken[ accepté');
+select throws_ok($$ select public.register_push_token('ExpoPushToken[unclosed', 'ios') $$, '22023', null,
+                 'jeton sans ] final : 22023');
+select public.register_push_token('ExponentPushToken[n' || g || ']', 'android') from generate_series(1, 10) g;
+select is((select count(*)::int from public.push_tokens), 10, '11 jetons enregistrés : 10 conservés');
+select is((select count(*)::int from public.push_tokens where token = 'ExpoPushToken[new-style]'), 0,
+          '11e jeton : le plus ancien est supprimé');
+select is((select count(*)::int from public.push_tokens where token = 'ExponentPushToken[n10]'), 1, 'le plus récent est conservé');
+reset role;
+select is((select count(*)::int from public.push_tokens where profile_id = pg_temp.k('s1')), 10, 'limite par profil (vue serveur)');
+
 set local role anon;
 select throws_ok($$ select public.register_push_token('ExponentPushToken[bbb]', 'ios') $$, '42501', null,
                  'anon : register_push_token interdite');
@@ -252,6 +280,84 @@ select is(public.invoke_send_push(), null, 'aucune ligne en attente : rien');
 select pg_temp.login('a0000000-0000-0000-0000-00000000000a');
 select throws_ok($$ select public.invoke_send_push() $$, '42501', null, 'authenticated : invoke_send_push interdite');
 reset role;
+
+-- ---------------------------------------------------------------------------
+-- claim_outbox : réservation des lignes, plafond de tentatives, expiration
+-- ---------------------------------------------------------------------------
+create temp table rid (k text primary key, v bigint);
+grant all on rid to service_role;
+create function pg_temp.r(p_k text) returns bigint language sql stable as $$ select v from rid where k = p_k $$;
+create function pg_temp.ob(p_k text, p_profile uuid, p_kind text, p_course uuid, p_age interval,
+                           p_attempts int default 0, p_payload jsonb default '{}') returns void
+language sql security definer as $$
+  with x as (
+    insert into public.notification_outbox (profile_id, kind, course_id, payload, created_at, attempts)
+    values (p_profile, p_kind, p_course, p_payload, now() - p_age, p_attempts)
+    returning id)
+  insert into rid select p_k, id from x;
+$$;
+
+delete from public.notification_outbox;
+insert into public.profiles (parent_profile_id, first_name, last_name, age, sports)
+values (pg_temp.k('s1'), 'Lina', 'One', 9, '{jjb}');
+insert into ids values
+  ('kid', (select id from public.profiles where parent_profile_id = pg_temp.k('s1'))),
+  ('fut', pg_temp.mk(pg_temp.k('p1'), interval '2 days')),
+  ('gone', pg_temp.mk(pg_temp.k('p1'), interval '-1 minute'));
+update public.courses set sport = 'mma' where id = pg_temp.k('fut');
+
+select pg_temp.ob('r7', pg_temp.k('pq'), 'prof_validated', null, interval '7 minutes', 4);
+select pg_temp.ob('r1', pg_temp.k('p2'), 'slot_vacant', pg_temp.k('fut'), interval '6 minutes');
+select pg_temp.ob('r2', pg_temp.k('pq'), 'prof_validated', null, interval '5 minutes');
+select pg_temp.ob('r3', pg_temp.k('s1'), 'course_cancelled', pg_temp.k('fut'), interval '4 minutes', 0,
+                  jsonb_build_object('child_profile_id', pg_temp.k('kid')));
+select pg_temp.ob('r4', pg_temp.k('p1'), 'slot_vacant', pg_temp.k('gone'), interval '9 minutes');
+select pg_temp.ob('r5', pg_temp.k('s1'), 'course_cancelled', pg_temp.k('gone'), interval '9 minutes');
+select pg_temp.ob('r6', pg_temp.k('pq'), 'prof_validated', null, interval '9 minutes', 5);
+
+select pg_temp.login('a0000000-0000-0000-0000-00000000000a');
+select throws_ok($$ select * from public.claim_outbox(10) $$, '42501', null, 'authenticated : claim_outbox interdite');
+reset role;
+
+set local role service_role;
+select is((select array_agg(id order by id) from public.claim_outbox(2)),
+          (select array_agg(x order by x) from unnest(array[pg_temp.r('r7'), pg_temp.r('r1')]) x),
+          'claim_outbox(2) : les 2 plus anciennes lignes réclamables');
+reset role;
+select is((select attempts from public.notification_outbox where id = pg_temp.r('r7')), 5, 'tentative comptée');
+select isnt((select claimed_at from public.notification_outbox where id = pg_temp.r('r1')), null, 'claimed_at renseigné');
+select is((select array_agg(error order by id) from public.notification_outbox
+            where id in (pg_temp.r('r4'), pg_temp.r('r5'))),
+          array['expired', 'expired'], 'cours déjà commencé : slot_vacant et course_cancelled expirés');
+select is((select error from public.notification_outbox where id = pg_temp.r('r6')), 'max_attempts',
+          '5 tentatives : max_attempts');
+select is((select count(*)::int from public.notification_outbox where sent_at is not null), 0, 'aucune ligne marquée envoyée');
+
+set local role service_role;
+create temp table c2 as select * from public.claim_outbox(10);
+reset role;
+select is((select array_agg(id order by id) from c2),
+          (select array_agg(x order by x) from unnest(array[pg_temp.r('r2'), pg_temp.r('r3')]) x),
+          'second claim : lignes déjà réclamées (< 5 min) exclues');
+select is((select row(sport, starts_at, child_first_name, language)::text from c2 where id = pg_temp.r('r3')),
+          (select row('mma', starts_at, 'Lina', 'fr')::text from public.courses where id = pg_temp.k('fut')),
+          'claim : sport, début du cours, prénom de l''enfant, langue');
+select is((select row(sport, starts_at, child_first_name)::text from c2 where id = pg_temp.r('r2')),
+          row(null, null, null)::text, 'claim prof_validated : sans cours ni enfant');
+
+set local role service_role;
+select is((select count(*)::int from public.claim_outbox(10)), 0, 'tout est réclamé : rien');
+reset role;
+
+-- réservation expirée (> 5 min) : de nouveau réclamable
+update public.notification_outbox set claimed_at = now() - interval '6 minutes'
+ where id in (pg_temp.r('r1'), pg_temp.r('r7'));
+set local role service_role;
+select is((select array_agg(id) from public.claim_outbox(10)), array[pg_temp.r('r1')],
+          'réservation expirée : réclamée à nouveau (r7 a atteint 5 tentatives)');
+reset role;
+select is((select attempts from public.notification_outbox where id = pg_temp.r('r1')), 2, 'r1 : 2 tentatives');
+select is((select error from public.notification_outbox where id = pg_temp.r('r7')), 'max_attempts', 'r7 : max_attempts');
 
 select * from finish();
 rollback;

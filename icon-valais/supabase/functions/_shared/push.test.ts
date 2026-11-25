@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertFalse, assertNotEquals } from 'jsr:@std/assert@1';
+import { assert, assertEquals, assertFalse, assertNotEquals, assertStringIncludes } from 'jsr:@std/assert@1';
 import {
   buildPushMessages,
   chunk,
@@ -127,7 +127,6 @@ const KEY = 'svc-key';
 function fakeDeps(opts: {
   rows: OutboxRow[];
   tokens: { token: string; profile_id: string }[];
-  langs?: { id: string; language: string | null }[];
   respond?: (batch: ExpoMessage[]) => Response;
 }) {
   const log = {
@@ -136,16 +135,20 @@ function fakeDeps(opts: {
     errors: [] as [number[], string][],
     deleted: [] as string[],
     pendingLimit: 0,
+    released: [] as number[],
     headers: [] as Headers[],
   };
   const deps: SendPushDeps = {
     serviceKey: KEY,
-    loadPending: (limit) => {
+    claim: (limit) => {
       log.pendingLimit = limit;
       return Promise.resolve(opts.rows);
     },
     loadTokens: (ids) => Promise.resolve(opts.tokens.filter((t) => ids.includes(t.profile_id))),
-    loadLangs: (ids) => Promise.resolve((opts.langs ?? []).filter((p) => ids.includes(p.id))),
+    releaseClaims: (ids) => {
+      log.released.push(...ids);
+      return Promise.resolve();
+    },
     markSent: (ids) => {
       log.sent.push(...ids);
       return Promise.resolve();
@@ -185,12 +188,11 @@ Deno.test('handleSendPush: refuse sans clé service, avec une autre clé, ou en 
 Deno.test('handleSendPush: paquets de 100, sent_at, erreurs, jetons DeviceNotRegistered supprimés', async () => {
   // 250 lignes pour p-a (1 jeton) ; ligne 900 pour p-dead ; ligne 901 pour p-none (sans jeton)
   const rows = Array.from({ length: 250 }, (_, i) => row(i + 1, 'p-a', 'slot_vacant'));
-  rows.push(row(900, 'p-dead', 'prof_validated', null), row(901, 'p-none', 'slot_vacant'));
+  rows.push({ ...row(900, 'p-dead', 'prof_validated', null), language: 'de' }, row(901, 'p-none', 'slot_vacant'));
   const dead = 'ExponentPushToken[dead]';
   const { deps, log } = fakeDeps({
     rows,
     tokens: [{ token: T1, profile_id: 'p-a' }, { token: dead, profile_id: 'p-dead' }],
-    langs: [{ id: 'p-dead', language: 'de' }],
     respond: (batch) =>
       new Response(
         JSON.stringify({
@@ -227,6 +229,7 @@ Deno.test('handleSendPush: Expo en échec → lignes laissées en attente', asyn
   assertEquals(log.sent, []);
   assertEquals(log.errors, []);
   assertEquals(res.body.pending, 1);
+  assertEquals(log.released, [1], 'réservation libérée pour réessayer à la minute suivante');
 });
 
 Deno.test('handleSendPush: aucune ligne → rien envoyé', async () => {
@@ -234,4 +237,81 @@ Deno.test('handleSendPush: aucune ligne → rien envoyé', async () => {
   const res = await handleSendPush(post(`Bearer ${KEY}`), deps);
   assertEquals(res.body.processed, 0);
   assertEquals(log.batches.length, 0);
+});
+
+Deno.test('handleSendPush: paquet refusé en 4xx → messages renvoyés un par un', async () => {
+  const bad = 'ExponentPushToken[bad]';
+  const rows = [row(1, 'p-a', 'slot_vacant'), row(2, 'p-b', 'slot_vacant'), row(3, 'p-c', 'slot_vacant')];
+  const { deps, log } = fakeDeps({
+    rows,
+    tokens: [{ token: T1, profile_id: 'p-a' }, { token: bad, profile_id: 'p-b' }, { token: T3, profile_id: 'p-c' }],
+    respond: (batch) =>
+      batch.some((m) => m.to === bad)
+        ? new Response('{"errors":[{"code":"VALIDATION_ERROR"}]}', { status: 400 })
+        : new Response(JSON.stringify({ data: batch.map(() => ({ status: 'ok', id: 'x' })) })),
+  });
+  const res = await handleSendPush(post(`Bearer ${KEY}`), deps);
+  assertEquals(log.batches.map((b) => b.length), [3, 1, 1, 1]);
+  assertEquals(log.sent, [1, 3]);
+  assertEquals(log.errors, [[[2], 'http_400']]);
+  assertEquals(res.body.failed, 1);
+});
+
+Deno.test('handleSendPush: 429 → pas de découpage, lignes en attente', async () => {
+  const { deps, log } = fakeDeps({
+    rows: [row(1, 'p-a', 'slot_vacant'), row(2, 'p-b', 'slot_vacant')],
+    tokens: [{ token: T1, profile_id: 'p-a' }, { token: T2, profile_id: 'p-b' }],
+    respond: () => new Response('slow down', { status: 429 }),
+  });
+  await handleSendPush(post(`Bearer ${KEY}`), deps);
+  assertEquals(log.batches.length, 1);
+  assertEquals(log.released, [1, 2]);
+});
+
+// ---------------------------------------------------------------------------
+// Textes : sport, date et heure locales (Europe/Zurich), prénom de l'enfant
+// ---------------------------------------------------------------------------
+const STARTS = '2026-12-03T13:30:00Z'; // jeudi 3 décembre 2026, 14:30 à Zurich (UTC+1)
+
+Deno.test('pushText: sport et date/heure locales dans les 4 langues', () => {
+  const expect: Record<Lang, [string, string]> = {
+    fr: ['MMA', 'décembre'],
+    de: ['MMA', 'Dezember'],
+    en: ['MMA', 'December'],
+    ru: ['ММА', 'декабря'],
+  };
+  for (const [lang, [sport, month]] of Object.entries(expect) as [Lang, [string, string]][]) {
+    for (const kind of ['slot_vacant', 'course_cancelled'] as const) {
+      const { body } = pushText(lang, kind, { sport: 'mma', startsAt: STARTS });
+      assertStringIncludes(body, sport, `${lang}/${kind}`);
+      assertStringIncludes(body, month, `${lang}/${kind}`);
+      assertStringIncludes(body, '14:30', `${lang}/${kind} heure de Zurich`);
+    }
+  }
+  assertStringIncludes(pushText('de', 'slot_vacant', { sport: 'jjb', startsAt: STARTS }).body, 'Brasilianisches Jiu-Jitsu');
+  // heure d'été : 1er juillet 2026 16:00 UTC → 18:00 à Zurich
+  assertStringIncludes(pushText('fr', 'slot_vacant', { sport: 'jjb', startsAt: '2026-07-01T16:00:00Z' }).body, '18:00');
+});
+
+Deno.test('pushText: prénom de l\'enfant pour une annulation reçue par le parent', () => {
+  for (const lang of ['fr', 'de', 'en', 'ru'] as Lang[]) {
+    assertStringIncludes(pushText(lang, 'course_cancelled', { sport: 'jjb', startsAt: STARTS, childName: 'Lina' }).body, 'Lina');
+    assertStringIncludes(pushText(lang, 'course_cancelled', { childName: 'Lina' }).body, 'Lina');
+    assertFalse(pushText(lang, 'course_cancelled', { sport: 'jjb', startsAt: STARTS }).body.includes('Lina'));
+  }
+});
+
+Deno.test('buildPushMessages: utilise sport, début du cours et prénom de l\'enfant de la ligne', () => {
+  const r: OutboxRow = {
+    ...row(1, 'parent', 'course_cancelled', 'c-9'),
+    payload: { child_profile_id: 'kid' },
+    sport: 'grappling',
+    starts_at: STARTS,
+    child_first_name: 'Lina',
+  };
+  const [m] = buildPushMessages([r], new Map([['parent', [T1]]]), new Map<string, Lang>([['parent', 'en']]));
+  assertStringIncludes(m.body, 'Lina');
+  assertStringIncludes(m.body, 'Grappling');
+  assertStringIncludes(m.body, '14:30');
+  assertEquals(m.data, { courseId: 'c-9' });
 });
