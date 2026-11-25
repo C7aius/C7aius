@@ -35,7 +35,7 @@ npx supabase stop
 
 ### Edge Functions
 
-`send-parent-consent`, `confirm-parent-consent` et `delete-account` sont dans `supabase/functions`.
+`send-parent-consent`, `confirm-parent-consent`, `delete-account` et `send-push` sont dans `supabase/functions`.
 Secrets requis (à définir avec `npx supabase secrets set ...` en production, ou dans un fichier
 `supabase/functions/.env` pour `npx supabase functions serve`) :
 
@@ -46,6 +46,39 @@ Secrets requis (à définir avec `npx supabase secrets set ...` en production, o
 | `PUBLIC_FUNCTIONS_URL` | (optionnel) URL publique des fonctions, utilisée pour construire le lien de confirmation ; à défaut, déduite de la requête |
 
 `SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` sont fournis automatiquement par Supabase.
+
+## Notifications et tâches planifiées
+
+Les notifications sont écrites dans `notification_outbox` (annulation de cours, créneau sans prof,
+prof validé) puis envoyées par l'Edge Function `send-push` (Expo Push). L'application enregistre le
+jeton Expo de l'appareil avec `register_push_token(p_token, p_platform)` (table `push_tokens`).
+
+Deux tâches `pg_cron` sont créées par la migration `0006_notifications.sql` :
+
+| Tâche | Fréquence | Rôle |
+| --- | --- | --- |
+| `process-course-schedule` | toutes les 5 minutes | `process_course_schedule()` : cours sans prof dans les 24 h → notification `slot_vacant` aux profs validés et aux admins (une seule fois par cours) ; cours sans prof commencé → Open Mat |
+| `send-push` | chaque minute | s'il reste des notifications en attente, appelle `POST <functions_url>/send-push` via `pg_net` |
+
+`send-push` n'accepte que la clé `service_role` (`Authorization: Bearer <clé>`). La tâche lit l'URL et
+la clé dans Supabase Vault ; tant que ces deux secrets n'existent pas, elle ne fait rien (sans erreur).
+À créer une fois par projet (éditeur SQL du tableau de bord, ou `psql`) :
+
+```sql
+select vault.create_secret('https://<project-ref>.supabase.co/functions/v1', 'functions_url');
+select vault.create_secret('<clé service_role du projet>', 'service_role_key');
+```
+
+`functions_url` est la base des fonctions, sans `/send-push`. `service_role_key` doit être la même
+valeur que `SUPABASE_SERVICE_ROLE_KEY` dans les fonctions (clé JWT `service_role`, page *Settings → API*).
+Pour la changer : `select vault.update_secret(id, '<nouvelle valeur>') from vault.secrets where name = 'service_role_key';`.
+En local (depuis le conteneur Postgres) : `http://supabase_kong_icon-valais:8000/functions/v1` et la
+clé `service_role` affichée par `npx supabase status`.
+
+Secret optionnel de la fonction : `EXPO_ACCESS_TOKEN` (si la sécurité renforcée des notifications push
+est activée sur le projet Expo). Chaque ligne d'outbox reçoit `sent_at` (au moins un appareil accepté)
+ou `error` (`no_push_token`, code d'erreur Expo) ; si Expo est injoignable, la ligne reste en attente et
+est réessayée la minute suivante. Les jetons signalés `DeviceNotRegistered` sont supprimés.
 
 ## Lancer l'application
 

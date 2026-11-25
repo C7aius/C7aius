@@ -532,6 +532,43 @@ export type Database = {
           },
         ];
       };
+      push_tokens: {
+        Row: {
+          platform: string;
+          profile_id: string;
+          token: string;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          platform: string;
+          profile_id: string;
+          token: string;
+          updated_at?: string;
+        };
+        Update: {
+          platform?: string;
+          profile_id?: string;
+          token?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "push_tokens_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "push_tokens_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "public_profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       course_booking_counts: {
@@ -610,6 +647,7 @@ export type Database = {
       create_course: { Args: { p: Json; p_repeat_until?: string }; Returns: string[] };
       current_account_active: { Args: Record<PropertyKey, never>; Returns: boolean };
       current_profile_id: { Args: Record<PropertyKey, never>; Returns: string };
+      invoke_send_push: { Args: Record<PropertyKey, never>; Returns: number };
       is_account_active: {
         Args: {
           p: Omit<
@@ -625,6 +663,8 @@ export type Database = {
       is_self_or_child: { Args: { p_profile: string }; Returns: boolean };
       leave_slot: { Args: { p_course: string }; Returns: undefined };
       notify_profile: { Args: { p_course: string; p_kind: string; p_profile: string }; Returns: undefined };
+      process_course_schedule: { Args: Record<PropertyKey, never>; Returns: undefined };
+      register_push_token: { Args: { p_platform: string; p_token: string }; Returns: undefined };
       set_attendance: { Args: { p_course: string; p_present: boolean; p_profile: string }; Returns: undefined };
       set_belt: { Args: { p_belt: Database["public"]["Enums"]["belt"]; p_profile: string }; Returns: undefined };
       take_slot: { Args: { p_course: string }; Returns: undefined };
