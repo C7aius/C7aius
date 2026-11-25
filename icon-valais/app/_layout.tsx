@@ -9,7 +9,10 @@ export default function RootLayout() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    initI18n().then(() => setReady(true));
+    initI18n()
+      .catch(() => initI18n('fr'))
+      .catch(() => undefined)
+      .finally(() => setReady(true));
   }, []);
 
   if (!ready) return null;
