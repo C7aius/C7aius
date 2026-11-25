@@ -173,13 +173,13 @@ select throws_ok($$ update public.courses set places = 99 $$,
 select throws_ok($$ delete from public.courses $$,
                  '42501', null, 'prof : delete direct dans courses refusé');
 select throws_ok($$ select public.create_course(pg_temp.c('{"sport":"jjb","level":"adulte","places":0,"start_time":"19:00","end_time":"20:30"}')) $$,
-                 '23514', null, 'places = 0 refusé');
+                 '22023', null, 'places = 0 refusé');
 select throws_ok($$ select public.create_course(pg_temp.c('{"sport":"jjb","level":"adulte","places":101,"start_time":"19:00","end_time":"20:30"}')) $$,
-                 '23514', null, 'places = 101 refusé');
+                 '22023', null, 'places = 101 refusé');
 select throws_ok($$ select public.create_course(pg_temp.c('{"sport":"jjb","level":"adulte","start_time":"19:00","end_time":"19:00"}')) $$,
-                 '23514', null, 'end_time = start_time refusé');
+                 '22023', null, 'end_time = start_time refusé');
 select throws_ok($$ select public.create_course(pg_temp.c('{"sport":"jjb","level":"adulte","start_time":"19:00","end_time":"18:00"}')) $$,
-                 '23514', null, 'end_time < start_time refusé');
+                 '22023', null, 'end_time < start_time refusé');
 select throws_ok($$ select public.admin_upsert_location('{"name":"Sierre"}') $$,
                  '42501', null, 'prof : admin_upsert_location refusé');
 reset role;
@@ -254,10 +254,11 @@ select is(pg_temp.hint_of($$ select public.admin_upsert_location('{"id":"","is_d
           'invalid_field', 'admin_upsert_location : id vide → invalid_field');
 select is(pg_temp.hint_of($$ select public.admin_upsert_location('{"name":"   "}') $$),
           'missing_field', 'admin_upsert_location : nom blanc → missing_field');
+-- 0008 : plus d'écriture directe des lieux, même pour un admin (admin_upsert_location seulement)
 select throws_ok($$ update public.locations set archived = true where is_default $$,
-                 '23514', null, 'admin : UPDATE direct archivant le lieu par défaut refusé');
-select throws_ok($$ insert into public.locations (name) values ('  ') $$,
-                 '23514', null, 'admin : INSERT direct d''un nom blanc refusé');
+                 '42501', null, 'admin : UPDATE direct des lieux refusé');
+select throws_ok($$ insert into public.locations (name) values ('Pirate') $$,
+                 '42501', null, 'admin : INSERT direct des lieux refusé');
 select is((select array_agg(name) from public.locations where is_default), array['Sion'],
           'Sion reste le lieu par défaut');
 reset role;

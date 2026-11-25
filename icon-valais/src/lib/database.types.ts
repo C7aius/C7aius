@@ -196,7 +196,7 @@ export type Database = {
       courses: {
         Row: {
           created_at: string;
-          created_by: string;
+          created_by: string | null;
           ends_at: string;
           id: string;
           is_private: boolean;
@@ -216,7 +216,7 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           created_at?: string;
-          created_by: string;
+          created_by?: string | null;
           ends_at: string;
           id?: string;
           is_private?: boolean;
@@ -235,7 +235,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
-          created_by?: string;
+          created_by?: string | null;
           ends_at?: string;
           id?: string;
           is_private?: boolean;
@@ -686,6 +686,7 @@ export type Database = {
       notify_profile: { Args: { p_course: string; p_kind: string; p_profile: string }; Returns: undefined };
       process_course_schedule: { Args: Record<PropertyKey, never>; Returns: undefined };
       register_push_token: { Args: { p_platform: string; p_token: string }; Returns: undefined };
+      release_future_courses: { Args: { p_profile: string }; Returns: undefined };
       set_attendance: { Args: { p_course: string; p_present: boolean; p_profile: string }; Returns: undefined };
       set_belt: { Args: { p_belt: Database["public"]["Enums"]["belt"]; p_profile: string }; Returns: undefined };
       take_slot: { Args: { p_course: string }; Returns: undefined };

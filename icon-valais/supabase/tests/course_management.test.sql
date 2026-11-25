@@ -181,9 +181,9 @@ select is(pg_temp.hint_of($$ select public.update_course(pg_temp.r('upd', 2), '{
 select is(pg_temp.hint_of($$ select public.update_course(pg_temp.r('upd', 2), '{"start_time":"25:00"}', 'one') $$),
           'invalid_field', 'heure invalide → invalid_field');
 select throws_ok($$ select public.update_course(pg_temp.r('upd', 2), '{"start_time":"22:00","end_time":"21:00"}', 'one') $$,
-                 '23514', null, 'fin avant début refusée');
+                 '22023', null, 'fin avant début refusée');
 select throws_ok($$ select public.update_course(pg_temp.r('upd', 2), '{"places":0}', 'one') $$,
-                 '23514', null, 'places = 0 refusé');
+                 '22023', null, 'places = 0 refusé');
 select throws_ok($$ select public.update_course(gen_random_uuid(), '{"places":10}', 'one') $$,
                  'P0002', null, 'cours inconnu → P0002');
 select is(pg_temp.hint_of($$ select public.update_course(pg_temp.r('past'), '{"places":10}', 'one') $$),
