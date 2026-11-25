@@ -12,8 +12,9 @@
 --    changements d'heure.
 --
 -- HINTs stables (lus par l'application) :
---   repeat_too_far, repeat_before_start, location_archived, invalid_prof,
---   missing_field, default_location_archived.
+--   repeat_too_far, repeat_before_start, date_in_past, location_archived,
+--   no_default_location, invalid_prof, missing_field, invalid_field,
+--   default_location_archived, default_required.
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -28,12 +29,14 @@ create type public.course_status as enum ('prevu', 'open_mat', 'annule');
 -- ---------------------------------------------------------------------------
 create table public.locations (
   id         uuid primary key default gen_random_uuid(),
-  name       text unique not null check (char_length(name) <= 60),
+  name       text unique not null check (char_length(name) <= 60 and char_length(btrim(name)) > 0),
   address    text not null default '' check (char_length(address) <= 200),
   maps_url   text not null default '' check (maps_url = '' or maps_url ~ '^https://'),
   is_default bool not null default false,
   archived   bool not null default false,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- le lieu par défaut n'est jamais archivé (aussi pour un UPDATE admin direct)
+  constraint locations_default_not_archived check (not (is_default and archived))
 );
 
 -- un seul lieu par défaut
@@ -124,13 +127,17 @@ grant select on public.courses to authenticated;
 -- admin_upsert_location(p) : crée (sans id) ou modifie (avec id) un lieu.
 -- Clés : id, name, address, maps_url, is_default, archived. En modification,
 -- une clé absente garde sa valeur. is_default = true retire le défaut des
--- autres lieux. Le lieu par défaut ne peut pas être archivé.
+-- autres lieux. Le lieu par défaut ne peut pas être archivé, et il reste
+-- toujours un lieu par défaut. Valeur illisible → 22023 invalid_field.
 -- ---------------------------------------------------------------------------
 create function public.admin_upsert_location(p jsonb) returns uuid
 language plpgsql security definer set search_path = '' as $$
 declare
   v_old public.locations;
   v_id uuid;
+  v_in_id uuid;
+  v_in_default bool;
+  v_in_archived bool;
   v_default bool;
   v_archived bool;
 begin
@@ -138,18 +145,30 @@ begin
     raise exception 'admin_upsert_location: admin required' using errcode = '42501';
   end if;
 
-  if p->>'id' is not null then
-    select * into v_old from public.locations where id = (p->>'id')::uuid for update;
+  begin
+    v_in_id := (p->>'id')::uuid;
+    v_in_default := (p->>'is_default')::bool;
+    v_in_archived := (p->>'archived')::bool;
+  exception when data_exception then
+    raise exception 'admin_upsert_location: invalid value (%)', sqlerrm
+      using errcode = '22023', hint = 'invalid_field';
+  end;
+
+  -- sérialise les changements de lieu par défaut
+  perform 1 from public.locations where is_default for update;
+
+  if v_in_id is not null then
+    select * into v_old from public.locations where id = v_in_id for update;
     if v_old.id is null then
       raise exception 'admin_upsert_location: location not found' using errcode = 'P0002';
     end if;
-  elsif coalesce(p->>'name', '') = '' then
+  elsif coalesce(btrim(p->>'name'), '') = '' then
     raise exception 'admin_upsert_location: name is required'
       using errcode = '22023', hint = 'missing_field';
   end if;
 
-  v_default := coalesce((p->>'is_default')::bool, v_old.is_default, false);
-  v_archived := coalesce((p->>'archived')::bool, v_old.archived, false);
+  v_default := coalesce(v_in_default, v_old.is_default, false);
+  v_archived := coalesce(v_in_archived, v_old.archived, false);
   if v_default and v_archived then
     raise exception 'admin_upsert_location: the default location cannot be archived'
       using errcode = '22023', hint = 'default_location_archived';
@@ -174,6 +193,11 @@ begin
      where id = v_old.id
     returning id into v_id;
   end if;
+
+  if not exists (select 1 from public.locations where is_default) then
+    raise exception 'admin_upsert_location: a default location is required'
+      using errcode = '22023', hint = 'default_required';
+  end if;
   return v_id;
 end;
 $$;
@@ -184,8 +208,11 @@ $$;
 -- Clés de p : sport, level, local_date (YYYY-MM-DD), start_time (HH:MI),
 -- end_time (HH:MI) obligatoires ; kind, is_private, location_id (défaut :
 -- lieu par défaut), prof_id, places, price_member, price_non_member.
--- Limite de récurrence : prof → 31.12 de l'année courante (Europe/Zurich) ;
--- admin → local_date + 5 ans.
+-- Dates (Europe/Zurich) : prof → local_date ≥ aujourd'hui ; admin → au plus
+-- 7 jours dans le passé (date_in_past).
+-- Limite de récurrence : prof → 31.12 de l'année courante ; admin →
+-- local_date + 5 ans (repeat_too_far).
+-- Valeur illisible ou mal formée → 22023 invalid_field.
 -- Retourne les id créés, dans l'ordre chronologique.
 -- ---------------------------------------------------------------------------
 create function public.create_course(p jsonb, p_repeat_until date default null) returns uuid[]
@@ -193,7 +220,16 @@ language plpgsql security definer set search_path = '' as $$
 declare
   v_admin bool := public.is_admin();
   v_me uuid := public.current_profile_id();
+  v_today date := (now() at time zone 'Europe/Zurich')::date;
+  v_sport public.sport;
+  v_level public.course_level;
+  v_kind public.course_kind;
+  v_private bool;
+  v_location_id uuid;
   v_prof uuid;
+  v_places int;
+  v_price_member numeric(8,2);
+  v_price_non_member numeric(8,2);
   v_location public.locations;
   v_date date;
   v_start time;
@@ -205,12 +241,46 @@ begin
   if not (v_admin or public.is_active_prof()) then
     raise exception 'create_course: active prof or admin required' using errcode = '42501';
   end if;
-  if coalesce((p->>'is_private')::bool, false) and not v_admin then
+
+  if p->>'sport' is null or p->>'level' is null or p->>'local_date' is null
+     or p->>'start_time' is null or p->>'end_time' is null then
+    raise exception 'create_course: sport, level, local_date, start_time and end_time are required'
+      using errcode = '22023', hint = 'missing_field';
+  end if;
+
+  -- lecture des valeurs : toute valeur illisible → invalid_field
+  begin
+    -- formats stricts YYYY-MM-DD et HH:MI (longueur fixe + motif ancré au début)
+    if char_length(p->>'local_date') <> 10
+       or p->>'local_date' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+       or char_length(p->>'start_time') <> 5
+       or p->>'start_time' !~ '^([01][0-9]|2[0-3]):[0-5][0-9]'
+       or char_length(p->>'end_time') <> 5
+       or p->>'end_time' !~ '^([01][0-9]|2[0-3]):[0-5][0-9]' then
+      raise exception 'bad date or time format' using errcode = '22007';
+    end if;
+    v_date := (p->>'local_date')::date;
+    v_start := (p->>'start_time')::time;
+    v_end := (p->>'end_time')::time;
+    v_sport := (p->>'sport')::public.sport;
+    v_level := (p->>'level')::public.course_level;
+    v_kind := coalesce((p->>'kind')::public.course_kind, 'normal');
+    v_private := coalesce((p->>'is_private')::bool, false);
+    v_location_id := (p->>'location_id')::uuid;
+    v_prof := (p->>'prof_id')::uuid;
+    v_places := coalesce((p->>'places')::int, 20);
+    v_price_member := coalesce((p->>'price_member')::numeric(8,2), 0);
+    v_price_non_member := coalesce((p->>'price_non_member')::numeric(8,2), 0);
+  exception when data_exception then
+    raise exception 'create_course: invalid value (%)', sqlerrm
+      using errcode = '22023', hint = 'invalid_field';
+  end;
+
+  if v_private and not v_admin then
     raise exception 'create_course: only an admin can create a private course' using errcode = '42501';
   end if;
 
   -- prof du cours
-  v_prof := (p->>'prof_id')::uuid;
   if v_prof is null and not v_admin then
     v_prof := v_me;
   end if;
@@ -228,23 +298,24 @@ begin
     end if;
   end if;
 
-  if p->>'sport' is null or p->>'level' is null or p->>'local_date' is null
-     or p->>'start_time' is null or p->>'end_time' is null then
-    raise exception 'create_course: sport, level, local_date, start_time and end_time are required'
-      using errcode = '22023', hint = 'missing_field';
+  -- date : pas dans le passé (admin : 7 jours au plus)
+  if v_date < v_today - (case when v_admin then 7 else 0 end) then
+    raise exception 'create_course: local_date is in the past'
+      using errcode = '22023', hint = 'date_in_past';
   end if;
-  v_date := (p->>'local_date')::date;
-  v_start := (p->>'start_time')::time;
-  v_end := (p->>'end_time')::time;
 
   -- lieu
-  if p->>'location_id' is null then
+  if v_location_id is null then
     select * into v_location from public.locations where is_default;
+    if v_location.id is null then
+      raise exception 'create_course: no default location'
+        using errcode = '22023', hint = 'no_default_location';
+    end if;
   else
-    select * into v_location from public.locations where id = (p->>'location_id')::uuid;
-  end if;
-  if v_location.id is null then
-    raise exception 'create_course: location not found' using errcode = 'P0002';
+    select * into v_location from public.locations where id = v_location_id;
+    if v_location.id is null then
+      raise exception 'create_course: location not found' using errcode = 'P0002';
+    end if;
   end if;
   if v_location.archived then
     raise exception 'create_course: location is archived'
@@ -259,7 +330,7 @@ begin
     end if;
     v_limit := case
       when v_admin then (v_date + interval '5 years')::date
-      else make_date(extract(year from now() at time zone 'Europe/Zurich')::int, 12, 31)
+      else make_date(extract(year from v_today)::int, 12, 31)
     end;
     if p_repeat_until > v_limit then
       raise exception 'create_course: p_repeat_until is too far'
@@ -274,19 +345,10 @@ begin
       prof_id, places, price_member, price_non_member, created_by
     )
     select
-      v_series,
-      (p->>'sport')::public.sport,
-      (p->>'level')::public.course_level,
-      coalesce((p->>'kind')::public.course_kind, 'normal'),
-      coalesce((p->>'is_private')::bool, false),
-      v_location.id,
+      v_series, v_sport, v_level, v_kind, v_private, v_location.id,
       (d + v_start) at time zone 'Europe/Zurich',
       (d + v_end) at time zone 'Europe/Zurich',
-      v_prof,
-      coalesce((p->>'places')::int, 20),
-      coalesce((p->>'price_member')::numeric, 0),
-      coalesce((p->>'price_non_member')::numeric, 0),
-      v_me
+      v_prof, v_places, v_price_member, v_price_non_member, v_me
     from (
       select g::date as d
         from generate_series(v_date::timestamp, coalesce(p_repeat_until, v_date)::timestamp, interval '1 week') g
