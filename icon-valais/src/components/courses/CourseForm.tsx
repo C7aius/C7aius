@@ -79,6 +79,7 @@ export function CourseForm({ mode, role, initial, inSeries, onSubmit }: Props) {
   const today = zurichToday();
   const num = (s: string) => (s.trim() === '' ? NaN : Number(s.trim().replace(',', '.')));
   const fixedUntil = !isAdmin && recurring ? maxRepeatUntil('prof', localDate, today) : undefined;
+  const profYearLimited = !!fixedUntil && /^\d{4}-\d{2}-\d{2}$/.test(localDate.trim()) && fixedUntil < localDate.trim();
   const adminMax = isAdmin && /^\d{4}-\d{2}-\d{2}$/.test(localDate) ? maxRepeatUntil('admin', localDate, today) : undefined;
   const err = (k: string) => (errors[k] ? t(errors[k]) : undefined);
   const shownLocations = locations.filter((l) => !l.archived || l.id === initial?.locationId);
@@ -175,10 +176,14 @@ export function CourseForm({ mode, role, initial, inSeries, onSubmit }: Props) {
             <Switch accessibilityLabel={t('courses.form.recurring')} value={recurring} onValueChange={setRecurring} />
           </View>
           {recurring && !isAdmin ? (
-            <>
-              <Text style={styles.hint}>{t('courses.form.repeatUntilFixed', { date: formatDate(fixedUntil ?? '') })}</Text>
-              <ErrorText>{err('repeatUntil')}</ErrorText>
-            </>
+            profYearLimited ? (
+              <ErrorText>{t('courses.form.err.profYearOnly')}</ErrorText>
+            ) : (
+              <>
+                <Text style={styles.hint}>{t('courses.form.repeatUntilFixed', { date: formatDate(fixedUntil ?? '') })}</Text>
+                <ErrorText>{err('repeatUntil')}</ErrorText>
+              </>
+            )
           ) : null}
           {recurring && isAdmin ? (
             <>

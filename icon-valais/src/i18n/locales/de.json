@@ -321,7 +321,8 @@
         "repeatTooFar": "Enddatum zu weit entfernt",
         "nameTooLong": "Höchstens 60 Zeichen",
         "addressTooLong": "Höchstens 200 Zeichen",
-        "mapsUrl": "Der Link muss mit https:// beginnen"
+        "mapsUrl": "Der Link muss mit https:// beginnen",
+        "profYearOnly": "Trainer können einen Kurs nur bis zum 31. Dezember des laufenden Jahres wiederholen."
       }
     }
   }

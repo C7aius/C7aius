@@ -78,6 +78,13 @@ export function validateCourseForm(
       if (!errors[field]) errors[field] = issue.message;
     }
   }
+  // prof : la répétition s'arrête au 31.12 de l'année en cours ; un cours d'une année suivante ne peut donc pas être récurrent
+  if (
+    role !== 'admin' && v.recurring && isValidDate(v.localDate) &&
+    maxRepeatUntil(role, v.localDate, today) < v.localDate
+  ) {
+    errors.repeatUntil = key('profYearOnly');
+  }
   if (
     v.recurring && v.repeatUntil && isValidDate(v.repeatUntil) && isValidDate(v.localDate) &&
     !errors.repeatUntil && v.repeatUntil > maxRepeatUntil(role, v.localDate, today)

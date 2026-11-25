@@ -321,7 +321,8 @@
         "repeatTooFar": "End date too far away",
         "nameTooLong": "60 characters maximum",
         "addressTooLong": "200 characters maximum",
-        "mapsUrl": "The link must start with https://"
+        "mapsUrl": "The link must start with https://",
+        "profYearOnly": "Coaches can only repeat a class until 31 December of the current year."
       }
     }
   }

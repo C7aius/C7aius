@@ -110,6 +110,17 @@ describe('new course', () => {
     expect(mockRpc.mock.calls[0][1].p_repeat_until).toBe(`${zurichToday().slice(0, 4)}-12-31`);
   });
 
+  it('prof recurring in a later year shows the dedicated message and no misleading hint', async () => {
+    const nextYear = Number(zurichToday().slice(0, 4)) + 1;
+    await render(<NewCourse />);
+    await fill(`${nextYear}-01-12`);
+    await fireEvent(screen.getByLabelText('Cours récurrent'), 'valueChange', true);
+    expect(await screen.findByText("Les profs ne peuvent répéter un cours que jusqu'au 31 décembre de l'année en cours.")).toBeTruthy();
+    expect(screen.queryByText(/Chaque semaine jusqu'au/)).toBeNull();
+    await fireEvent.press(screen.getByText('Créer le cours'));
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
   it('admin recurring beyond the maximum is refused client side', async () => {
     mockAuth = { profile: { id: 'me', role: 'admin' }, isActive: true };
     await render(<NewCourse />);

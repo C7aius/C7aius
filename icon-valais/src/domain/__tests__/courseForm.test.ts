@@ -64,6 +64,12 @@ describe('courseFormSchema', () => {
   it('rejects an end date before the start', () => {
     expect(errs({ recurring: true, repeatUntil: '2026-03-17' }).repeatUntil).toBeDefined();
   });
+  it('prof recurring in a later year gets the dedicated message', () => {
+    const r = validateCourseForm({ ...base, localDate: '2027-01-12', recurring: true, repeatUntil: '2026-12-31' }, 'prof', '2026-03-01');
+    expect('errors' in r && r.errors.repeatUntil).toBe('courses.form.err.profYearOnly');
+    const a = validateCourseForm({ ...base, localDate: '2027-01-12', recurring: true, repeatUntil: '2027-06-01' }, 'admin', '2026-03-01');
+    expect('values' in a).toBe(true);
+  });
   it('rejects an end date beyond the maximum', () => {
     expect(errs({ recurring: true, repeatUntil: '2027-01-07' }, 'prof').repeatUntil).toBeDefined();
     expect(errs({ recurring: true, repeatUntil: '2026-12-31' }, 'prof').repeatUntil).toBeUndefined();

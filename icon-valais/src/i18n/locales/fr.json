@@ -321,7 +321,8 @@
         "repeatTooFar": "Date de fin trop lointaine",
         "nameTooLong": "60 caractères au maximum",
         "addressTooLong": "200 caractères au maximum",
-        "mapsUrl": "Le lien doit commencer par https://"
+        "mapsUrl": "Le lien doit commencer par https://",
+        "profYearOnly": "Les profs ne peuvent répéter un cours que jusqu'au 31 décembre de l'année en cours."
       }
     }
   }
