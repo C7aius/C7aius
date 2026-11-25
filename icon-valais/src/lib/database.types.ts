@@ -10,12 +10,7 @@ export type Database = {
     };
     Functions: {
       graphql: {
-        Args: {
-          extensions?: Json;
-          operationName?: string;
-          query?: string;
-          variables?: Json;
-        };
+        Args: { extensions?: Json; operationName?: string; query?: string; variables?: Json };
         Returns: Json;
       };
     };
@@ -28,6 +23,70 @@ export type Database = {
   };
   public: {
     Tables: {
+      bookings: {
+        Row: {
+          booked_by: string;
+          cancelled_at: string | null;
+          course_id: string;
+          created_at: string;
+          id: string;
+          profile_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          booked_by: string;
+          cancelled_at?: string | null;
+          course_id: string;
+          created_at?: string;
+          id?: string;
+          profile_id: string;
+        };
+        Update: {
+          booked_by?: string;
+          cancelled_at?: string | null;
+          course_id?: string;
+          created_at?: string;
+          id?: string;
+          profile_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "bookings_booked_by_fkey";
+            columns: ["booked_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "bookings_booked_by_fkey";
+            columns: ["booked_by"];
+            isOneToOne: false;
+            referencedRelation: "public_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "bookings_course_id_fkey";
+            columns: ["course_id"];
+            isOneToOne: false;
+            referencedRelation: "courses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "bookings_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "bookings_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "public_profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       course_series: {
         Row: {
           created_at: string;
@@ -196,6 +255,62 @@ export type Database = {
           name?: string;
         };
         Relationships: [];
+      };
+      notification_outbox: {
+        Row: {
+          course_id: string | null;
+          created_at: string | null;
+          error: string | null;
+          id: number;
+          kind: string;
+          payload: NonNullable<Json>;
+          profile_id: string;
+          sent_at: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          course_id?: string | null;
+          created_at?: string | null;
+          error?: string | null;
+          id?: number;
+          kind: string;
+          payload?: NonNullable<Json>;
+          profile_id: string;
+          sent_at?: string | null;
+        };
+        Update: {
+          course_id?: string | null;
+          created_at?: string | null;
+          error?: string | null;
+          id?: number;
+          kind?: string;
+          payload?: NonNullable<Json>;
+          profile_id?: string;
+          sent_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notification_outbox_course_id_fkey";
+            columns: ["course_id"];
+            isOneToOne: false;
+            referencedRelation: "courses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notification_outbox_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notification_outbox_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "public_profiles";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       parent_consents: {
         Row: {
@@ -370,36 +485,23 @@ export type Database = {
       };
     };
     Functions: {
-      admin_mark_paid_current_year: {
-        Args: { p_profile: string };
-        Returns: undefined;
-      };
+      admin_mark_paid_current_year: { Args: { p_profile: string }; Returns: undefined };
       admin_set_prof_status: {
-        Args: {
-          p_profile: string;
-          p_status: Database["public"]["Enums"]["prof_status"];
-        };
+        Args: { p_profile: string; p_status: Database["public"]["Enums"]["prof_status"] };
         Returns: undefined;
       };
       admin_set_role: {
-        Args: {
-          p_profile: string;
-          p_role: Database["public"]["Enums"]["user_role"];
-        };
+        Args: { p_profile: string; p_role: Database["public"]["Enums"]["user_role"] };
         Returns: undefined;
       };
       admin_upsert_location: { Args: { p: Json }; Returns: string };
+      assign_prof: { Args: { p_course: string; p_prof: string }; Returns: undefined };
+      cancel_course: { Args: { p_course: string; p_scope: string }; Returns: number };
       check_parent_consent: { Args: { p_token: string }; Returns: boolean };
       confirm_parent_consent: { Args: { p_token: string }; Returns: boolean };
       create_child_profile: { Args: { p: Json }; Returns: string };
-      create_course: {
-        Args: { p: Json; p_repeat_until?: string };
-        Returns: string[];
-      };
-      current_account_active: {
-        Args: Record<PropertyKey, never>;
-        Returns: boolean;
-      };
+      create_course: { Args: { p: Json; p_repeat_until?: string }; Returns: string[] };
+      current_account_active: { Args: Record<PropertyKey, never>; Returns: boolean };
       current_profile_id: { Args: Record<PropertyKey, never>; Returns: string };
       is_account_active: {
         Args: {
@@ -412,13 +514,17 @@ export type Database = {
       };
       is_active_prof: { Args: Record<PropertyKey, never>; Returns: boolean };
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
-      set_belt: {
-        Args: {
-          p_belt: Database["public"]["Enums"]["belt"];
-          p_profile: string;
-        };
+      leave_slot: { Args: { p_course: string }; Returns: undefined };
+      notify_profile: {
+        Args: { p_course: string; p_kind: string; p_profile: string };
         Returns: undefined;
       };
+      set_belt: {
+        Args: { p_belt: Database["public"]["Enums"]["belt"]; p_profile: string };
+        Returns: undefined;
+      };
+      take_slot: { Args: { p_course: string }; Returns: undefined };
+      update_course: { Args: { p: Json; p_course: string; p_scope: string }; Returns: number };
     };
     Enums: {
       belt:
@@ -454,15 +560,13 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R;
@@ -481,14 +585,12 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I;
     }
@@ -506,14 +608,12 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U;
     }
@@ -531,14 +631,12 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
+    : never) = never,
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
@@ -548,14 +646,12 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
+    : never) = never,
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
