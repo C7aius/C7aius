@@ -23,6 +23,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="competition/index" options={{ title: t('tabs.competition') }} />
       <Tabs.Screen name="profile" options={{ title: t('tabs.profile') }} />
       <Tabs.Screen name="admin/index" options={{ title: t('tabs.admin'), href: isAdmin ? undefined : null }} />
+      <Tabs.Screen name="admin/user/[id]" options={{ href: null }} />
     </Tabs>
   );
 }
