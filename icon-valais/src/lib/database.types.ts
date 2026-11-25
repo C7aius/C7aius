@@ -10,7 +10,12 @@ export type Database = {
     };
     Functions: {
       graphql: {
-        Args: { extensions?: Json; operationName?: string; query?: string; variables?: Json };
+        Args: {
+          extensions?: Json;
+          operationName?: string;
+          query?: string;
+          variables?: Json;
+        };
         Returns: Json;
       };
     };
@@ -23,6 +28,215 @@ export type Database = {
   };
   public: {
     Tables: {
+      course_series: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "course_series_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "course_series_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "public_profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      courses: {
+        Row: {
+          created_at: string;
+          created_by: string;
+          ends_at: string;
+          id: string;
+          is_private: boolean;
+          kind: Database["public"]["Enums"]["course_kind"];
+          level: Database["public"]["Enums"]["course_level"];
+          location_id: string;
+          places: number;
+          price_member: number;
+          price_non_member: number;
+          prof_id: string | null;
+          series_id: string | null;
+          sport: Database["public"]["Enums"]["sport"];
+          starts_at: string;
+          status: Database["public"]["Enums"]["course_status"];
+          vacancy_notified_at: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          created_by: string;
+          ends_at: string;
+          id?: string;
+          is_private?: boolean;
+          kind?: Database["public"]["Enums"]["course_kind"];
+          level: Database["public"]["Enums"]["course_level"];
+          location_id: string;
+          places?: number;
+          price_member?: number;
+          price_non_member?: number;
+          prof_id?: string | null;
+          series_id?: string | null;
+          sport: Database["public"]["Enums"]["sport"];
+          starts_at: string;
+          status?: Database["public"]["Enums"]["course_status"];
+          vacancy_notified_at?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string;
+          ends_at?: string;
+          id?: string;
+          is_private?: boolean;
+          kind?: Database["public"]["Enums"]["course_kind"];
+          level?: Database["public"]["Enums"]["course_level"];
+          location_id?: string;
+          places?: number;
+          price_member?: number;
+          price_non_member?: number;
+          prof_id?: string | null;
+          series_id?: string | null;
+          sport?: Database["public"]["Enums"]["sport"];
+          starts_at?: string;
+          status?: Database["public"]["Enums"]["course_status"];
+          vacancy_notified_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "courses_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "courses_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "public_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "courses_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "courses_prof_id_fkey";
+            columns: ["prof_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "courses_prof_id_fkey";
+            columns: ["prof_id"];
+            isOneToOne: false;
+            referencedRelation: "public_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "courses_series_id_fkey";
+            columns: ["series_id"];
+            isOneToOne: false;
+            referencedRelation: "course_series";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      locations: {
+        Row: {
+          address: string;
+          archived: boolean;
+          created_at: string;
+          id: string;
+          is_default: boolean;
+          maps_url: string;
+          name: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          address?: string;
+          archived?: boolean;
+          created_at?: string;
+          id?: string;
+          is_default?: boolean;
+          maps_url?: string;
+          name: string;
+        };
+        Update: {
+          address?: string;
+          archived?: boolean;
+          created_at?: string;
+          id?: string;
+          is_default?: boolean;
+          maps_url?: string;
+          name?: string;
+        };
+        Relationships: [];
+      };
+      parent_consents: {
+        Row: {
+          confirmed_at: string | null;
+          created_at: string;
+          parent_email: string;
+          profile_id: string;
+          token: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          confirmed_at?: string | null;
+          created_at?: string;
+          parent_email: string;
+          profile_id: string;
+          token?: string;
+        };
+        Update: {
+          confirmed_at?: string | null;
+          created_at?: string;
+          parent_email?: string;
+          profile_id?: string;
+          token?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "parent_consents_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "parent_consents_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "public_profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       profiles: {
         Row: {
           age: number;
@@ -156,17 +370,36 @@ export type Database = {
       };
     };
     Functions: {
-      admin_mark_paid_current_year: { Args: { p_profile: string }; Returns: undefined };
+      admin_mark_paid_current_year: {
+        Args: { p_profile: string };
+        Returns: undefined;
+      };
       admin_set_prof_status: {
-        Args: { p_profile: string; p_status: Database["public"]["Enums"]["prof_status"] };
+        Args: {
+          p_profile: string;
+          p_status: Database["public"]["Enums"]["prof_status"];
+        };
         Returns: undefined;
       };
       admin_set_role: {
-        Args: { p_profile: string; p_role: Database["public"]["Enums"]["user_role"] };
+        Args: {
+          p_profile: string;
+          p_role: Database["public"]["Enums"]["user_role"];
+        };
         Returns: undefined;
       };
+      admin_upsert_location: { Args: { p: Json }; Returns: string };
+      check_parent_consent: { Args: { p_token: string }; Returns: boolean };
+      confirm_parent_consent: { Args: { p_token: string }; Returns: boolean };
       create_child_profile: { Args: { p: Json }; Returns: string };
-      current_account_active: { Args: Record<PropertyKey, never>; Returns: boolean };
+      create_course: {
+        Args: { p: Json; p_repeat_until?: string };
+        Returns: string[];
+      };
+      current_account_active: {
+        Args: Record<PropertyKey, never>;
+        Returns: boolean;
+      };
       current_profile_id: { Args: Record<PropertyKey, never>; Returns: string };
       is_account_active: {
         Args: {
@@ -180,7 +413,10 @@ export type Database = {
       is_active_prof: { Args: Record<PropertyKey, never>; Returns: boolean };
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
       set_belt: {
-        Args: { p_belt: Database["public"]["Enums"]["belt"]; p_profile: string };
+        Args: {
+          p_belt: Database["public"]["Enums"]["belt"];
+          p_profile: string;
+        };
         Returns: undefined;
       };
     };
@@ -195,6 +431,9 @@ export type Database = {
         | "violette"
         | "marron"
         | "noire";
+      course_kind: "normal" | "competition";
+      course_level: "adulte" | "enfant";
+      course_status: "prevu" | "open_mat" | "annule";
       lang: "fr" | "de" | "en" | "ru";
       prof_status: "en_attente" | "valide" | "refuse";
       sport: "jjb" | "grappling" | "mma";
@@ -215,13 +454,15 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R;
@@ -240,12 +481,14 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I;
     }
@@ -263,12 +506,14 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U;
     }
@@ -286,12 +531,14 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
-> = DefaultSchemaEnumNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
@@ -301,12 +548,14 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
-> = PublicCompositeTypeNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
@@ -329,6 +578,9 @@ export const Constants = {
         "marron",
         "noire",
       ],
+      course_kind: ["normal", "competition"],
+      course_level: ["adulte", "enfant"],
+      course_status: ["prevu", "open_mat", "annule"],
       lang: ["fr", "de", "en", "ru"],
       prof_status: ["en_attente", "valide", "refuse"],
       sport: ["jjb", "grappling", "mma"],
