@@ -67,7 +67,21 @@
     "sport": "Sport",
     "role": "Role",
     "language": "Language",
-    "saved": "Profile saved"
+    "saved": "Profile saved",
+    "edit": "Edit my profile",
+    "beltReadOnly": "The belt is awarded by a coach.",
+    "children": "My children",
+    "addChild": "Add a child",
+    "noChildren": "No children registered.",
+    "childTitle": "Child's profile",
+    "childAdd": "Add",
+    "childBelt": "Belt (optional)",
+    "deleteAccount": "Delete my account",
+    "deleteWarn1": "Do you really want to delete your account?",
+    "deleteContinue": "Continue",
+    "deleteWarn2": "This cannot be undone: all your data will be deleted.",
+    "deleteFinal": "Delete permanently",
+    "notFound": "Profile not found."
   },
   "belts": {
     "white": "White",
@@ -109,7 +123,12 @@
     "home": "Home",
     "schedule": "Schedule",
     "profile": "Profile",
-    "admin": "Admin"
+    "admin": "Admin",
+    "courses": "Classes",
+    "ranking": "Ranking",
+    "competition": "Competition",
+    "competitionSoon": "Coming soon",
+    "emptyHere": "Nothing to show yet."
   },
   "errors": {
     "generic": "Something went wrong",
@@ -127,7 +146,9 @@
     "coachYearsRequired": "Enter your years of coaching experience",
     "emailTaken": "This email address is already in use",
     "signupFailed": "Sign-up failed. Please check your details.",
-    "passwordMismatch": "Passwords do not match"
+    "passwordMismatch": "Passwords do not match",
+    "kidBeltAdult": "A kids' belt cannot be kept at 18 or older: a coach must change the belt first.",
+    "consentRequiredForAge": "Change refused: until parental consent is given, the age cannot reach 16."
   },
   "pending": {
     "profTitle": "Account awaiting approval",

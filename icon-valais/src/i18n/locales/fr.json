@@ -67,7 +67,21 @@
     "sport": "Sport",
     "role": "Rôle",
     "language": "Langue",
-    "saved": "Profil enregistré"
+    "saved": "Profil enregistré",
+    "edit": "Modifier mon profil",
+    "beltReadOnly": "La ceinture est attribuée par un professeur.",
+    "children": "Mes enfants",
+    "addChild": "Ajouter un enfant",
+    "noChildren": "Aucun enfant enregistré.",
+    "childTitle": "Profil de l'enfant",
+    "childAdd": "Ajouter",
+    "childBelt": "Ceinture (facultatif)",
+    "deleteAccount": "Supprimer mon compte",
+    "deleteWarn1": "Voulez-vous vraiment supprimer votre compte ?",
+    "deleteContinue": "Continuer",
+    "deleteWarn2": "Cette action est définitive : toutes vos données seront supprimées.",
+    "deleteFinal": "Supprimer définitivement",
+    "notFound": "Profil introuvable."
   },
   "belts": {
     "white": "Blanche",
@@ -109,7 +123,12 @@
     "home": "Accueil",
     "schedule": "Planning",
     "profile": "Profil",
-    "admin": "Admin"
+    "admin": "Admin",
+    "courses": "Cours",
+    "ranking": "Classement",
+    "competition": "Compétition",
+    "competitionSoon": "Bientôt disponible",
+    "emptyHere": "Rien à afficher pour le moment."
   },
   "errors": {
     "generic": "Une erreur est survenue",
@@ -127,7 +146,9 @@
     "coachYearsRequired": "Indiquez vos années d'expérience de coach",
     "emailTaken": "Cette adresse e-mail est déjà utilisée",
     "signupFailed": "L'inscription a échoué. Vérifiez vos informations.",
-    "passwordMismatch": "Les mots de passe ne correspondent pas"
+    "passwordMismatch": "Les mots de passe ne correspondent pas",
+    "kidBeltAdult": "Une ceinture enfant ne peut pas être conservée à 18 ans ou plus : un professeur doit d'abord modifier la ceinture.",
+    "consentRequiredForAge": "Modification refusée : tant que le consentement parental n'est pas donné, l'âge ne peut pas atteindre 16 ans."
   },
   "pending": {
     "profTitle": "Compte en attente de validation",
