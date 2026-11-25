@@ -5,7 +5,7 @@ import { supabase } from '@/src/lib/supabase';
 type RawCourse = Omit<CourseRow, 'prof' | 'booked' | 'myBookings'>;
 
 /**
- * Cours de la semaine [from, to[ : 4 requêtes au total, quel que soit le nombre de cours
+ * Cours de la semaine [from, to[ : au plus 4 requêtes, quel que soit le nombre de cours
  * (cours + lieu, noms des profs, compteurs, mes inscriptions).
  * `profileIds` limite « mes inscriptions » à soi et ses enfants (un admin/prof peut voir davantage).
  */

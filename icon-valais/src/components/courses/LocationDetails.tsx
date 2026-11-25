@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { colors } from '@/src/theme';
@@ -28,7 +28,8 @@ export function LocationDetails({ name, address, mapsUrl }: { name: string; addr
               accessibilityRole="link"
               // @ts-expect-error href est pris en charge par react-native-web
               href={safeUrl}
-              onPress={() => void Linking.openURL(safeUrl)}
+              // sur le web, le href suffit (évite une double ouverture)
+              onPress={Platform.OS === 'web' ? undefined : () => void Linking.openURL(safeUrl)}
               style={styles.link}
             >
               {t('courses.openMaps')}

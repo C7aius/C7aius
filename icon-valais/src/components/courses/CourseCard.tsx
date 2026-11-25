@@ -35,13 +35,19 @@ export function CourseCard({
   const bookable = !cancelled && !started;
 
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${t(`sports.${course.sport}`)} ${formatCourseTime(course.starts_at, course.ends_at, lang)}`} onPress={onOpen} style={styles.card}>
-      <Text style={[styles.time, cancelled && styles.struck]}>{formatCourseTime(course.starts_at, course.ends_at, lang)}</Text>
-      <View style={styles.row}>
-        <Text style={[styles.sport, cancelled && styles.struck]}>{t(`sports.${course.sport}`)}</Text>
-        <Text style={styles.meta}> · {t(`courses.level.${course.level}`)}</Text>
-        {course.kind === 'competition' ? <Text style={styles.badge}>{t('courses.competition')}</Text> : null}
-      </View>
+    <View style={styles.card}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${t(`sports.${course.sport}`)} ${formatCourseTime(course.starts_at, course.ends_at, lang)}`}
+        onPress={onOpen}
+      >
+        <Text style={[styles.time, cancelled && styles.struck]}>{formatCourseTime(course.starts_at, course.ends_at, lang)}</Text>
+        <View style={styles.row}>
+          <Text style={[styles.sport, cancelled && styles.struck]}>{t(`sports.${course.sport}`)}</Text>
+          <Text style={styles.meta}> · {t(`courses.level.${course.level}`)}</Text>
+          {course.kind === 'competition' ? <Text style={styles.badge}>{t('courses.competition')}</Text> : null}
+        </View>
+      </Pressable>
       <LocationDetails name={course.location.name} address={course.location.address} mapsUrl={course.location.maps_url} />
       {label === 'annule' ? (
         <Text style={[styles.status, styles.struck]}>{t('courses.cancelled')}</Text>
@@ -67,7 +73,7 @@ export function CourseCard({
         />
       ) : null}
       <ErrorText>{errorKey ? t(errorKey) : undefined}</ErrorText>
-    </Pressable>
+    </View>
   );
 }
 

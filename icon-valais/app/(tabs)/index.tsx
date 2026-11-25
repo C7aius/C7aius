@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -33,19 +33,23 @@ export default function Courses() {
   const { from, to } = useMemo(() => weekRange(anchor), [anchor]);
   const profileId = profile?.id;
 
+  const requestId = useRef(0);
   const load = useCallback(async () => {
     if (!profileId) return;
+    const mine = ++requestId.current;
     try {
       const { data: kidRows } = await supabase.from('profiles').select('id,first_name').eq('parent_profile_id', profileId);
       const kidList = ((kidRows ?? []) as Pick<Profile, 'id' | 'first_name'>[])
         .slice()
         .sort((a, b) => a.first_name.localeCompare(b.first_name));
+      const week = await fetchWeek(from, to, [profileId, ...kidList.map((k) => k.id)]);
+      if (mine !== requestId.current) return; // réponse périmée (semaine changée entre-temps)
       setKids(kidList);
-      setRows(await fetchWeek(from, to, [profileId, ...kidList.map((k) => k.id)]));
+      setRows(week);
       setNow(new Date());
       setLoadError(false);
     } catch {
-      setLoadError(true);
+      if (mine === requestId.current) setLoadError(true);
     }
   }, [profileId, from, to]);
 

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import { initI18n } from '@/src/i18n';
 import Courses from '../index';
@@ -6,6 +6,8 @@ import Courses from '../index';
 const mockRpc = jest.fn();
 const mockPush = jest.fn();
 let mockTables: Record<string, unknown[]> = {};
+let mockCoursesQueue: Promise<unknown[]>[] | null = null;
+let mockCoursesCalls = 0;
 let mockKids: { id: string; first_name: string }[] = [];
 
 jest.mock('@/src/auth/AuthProvider', () => ({
@@ -14,7 +16,7 @@ jest.mock('@/src/auth/AuthProvider', () => ({
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
   useFocusEffect: (cb: () => void) => {
-    require('react').useEffect(cb, []);
+    require('react').useEffect(cb, [cb]);
   },
 }));
 jest.mock('@/src/lib/supabase', () => ({
@@ -23,8 +25,13 @@ jest.mock('@/src/lib/supabase', () => ({
     from: (table: string) => {
       const q: Record<string, unknown> = {};
       for (const m of ['select', 'eq', 'in', 'is', 'gte', 'lt', 'order']) q[m] = () => q;
-      q.then = (res: (v: unknown) => unknown) =>
-        Promise.resolve({ data: table === 'profiles' ? mockKids : (mockTables[table] ?? []), error: null }).then(res);
+      q.then = (res: (v: unknown) => unknown) => {
+        if (table === 'courses' && mockCoursesQueue) {
+          mockCoursesCalls++;
+          return mockCoursesQueue.shift()!.then((data) => ({ data, error: null })).then(res);
+        }
+        return Promise.resolve({ data: table === 'profiles' ? mockKids : (mockTables[table] ?? []), error: null }).then(res);
+      };
       return q;
     },
   },
@@ -44,6 +51,8 @@ beforeAll(async () => {
 });
 beforeEach(() => {
   jest.clearAllMocks();
+  mockCoursesQueue = null;
+  mockCoursesCalls = 0;
   mockRpc.mockResolvedValue({ data: 'b1', error: null });
   mockKids = [];
   mockTables = {
@@ -115,4 +124,33 @@ it('tapping a card navigates to the detail', async () => {
   await render(<Courses />);
   await fireEvent.press(await screen.findByLabelText(/Jiu-jitsu brésilien/));
   expect(mockPush).toHaveBeenCalledWith('/courses/c1');
+});
+
+it('pressing book, a child chip or the location toggle does not open the detail', async () => {
+  mockKids = [{ id: 'k1', first_name: 'Léo' }];
+  await render(<Courses />);
+  await fireEvent.press(await screen.findByText('Léo'));
+  await fireEvent.press(screen.getByText('Réserver'));
+  await fireEvent.press(screen.getByLabelText('Lieu Dojo Sion'));
+  expect(mockPush).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByLabelText(/Jiu-jitsu brésilien/));
+  expect(mockPush).toHaveBeenCalledWith('/courses/c1');
+});
+
+it('ignores a stale response after a quick week switch', async () => {
+  let resolveA!: (v: unknown[]) => void;
+  let resolveB!: (v: unknown[]) => void;
+  mockCoursesQueue = [
+    new Promise((r) => { resolveA = r; }),
+    new Promise((r) => { resolveB = r; }),
+  ];
+  await render(<Courses />);
+  await waitFor(() => expect(mockCoursesCalls).toBe(1));
+  await fireEvent.press(screen.getByLabelText('Semaine suivante'));
+  await waitFor(() => expect(mockCoursesCalls).toBe(2));
+  await act(async () => { resolveB([course({ id: 'c2', price_non_member: 22 })]); });
+  expect(await screen.findByText('Non-adhérent : 22.00 CHF')).toBeTruthy();
+  await act(async () => { resolveA([course({ id: 'c1', price_non_member: 11 })]); });
+  expect(screen.getByText('Non-adhérent : 22.00 CHF')).toBeTruthy();
+  expect(screen.queryByText('Non-adhérent : 11.00 CHF')).toBeNull();
 });
