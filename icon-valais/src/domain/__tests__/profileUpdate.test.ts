@@ -22,10 +22,26 @@ describe('buildProfilePatch', () => {
   });
 });
 
+describe('buildProfilePatch length limits', () => {
+  it('rejects a phone over 30 characters', () => {
+    expect(buildProfilePatch({ ...base, phone: '1'.repeat(31) }, 'eleve')).toEqual({ errors: { phone: 'errors.phoneTooLong' } });
+  });
+  it('rejects too long coach texts', () => {
+    const prof = { ...base, coachYears: '2' };
+    expect(
+      buildProfilePatch({ ...prof, trainingPlaces: 'x'.repeat(1001), competitionAwards: 'x'.repeat(1001), cv: 'x'.repeat(3001) }, 'prof'),
+    ).toEqual({ errors: { trainingPlaces: 'errors.textTooLong', competitionAwards: 'errors.textTooLong', cv: 'errors.textTooLong' } });
+    expect('patch' in buildProfilePatch({ ...prof, cv: 'x'.repeat(3000) }, 'prof')).toBe(true);
+  });
+});
+
 describe('profileErrorKey', () => {
   it('maps constraint and RLS codes', () => {
     expect(profileErrorKey({ code: '23514' })).toBe('errors.kidBeltAdult');
     expect(profileErrorKey({ code: '42501' })).toBe('errors.consentRequiredForAge');
     expect(profileErrorKey({ code: 'XX' })).toBe('errors.generic');
+  });
+  it('maps the age-lowering refusal (hint) to its own message', () => {
+    expect(profileErrorKey({ code: '42501', hint: 'age_lower_requires_consent' })).toBe('errors.ageLowerRequiresConsent');
   });
 });

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import { initI18n } from '@/src/i18n';
+import { getConsentSendResult } from '@/src/auth/consentNotice';
 import { SignupWizard } from '../SignupWizard';
 
 const mockSignUp = jest.fn();
@@ -131,6 +132,31 @@ describe('SignupWizard', () => {
       body: { parent_email: 'parent@example.com' },
     });
     await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
+    expect(getConsentSendResult()).toBeNull();
+  });
+
+  it('records a failed consent send so the pending screen does not claim it was sent', async () => {
+    mockSignUp.mockResolvedValue({ data: { session: { access_token: 't' }, user: { id: 'u' } }, error: null });
+    mockInvoke.mockResolvedValue({ data: null, error: { context: { status: 502, json: async () => ({ error: 'email delivery failed' }) } } });
+    await render(<SignupWizard />);
+    await goToSports('12');
+    await press('Grappling');
+    await type('Années de grappling', '1');
+    await press('Suivant');
+    await type('E-mail du parent', 'parent@example.com');
+    await press("S'inscrire");
+    await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
+    expect(getConsentSendResult()).toBe('pending.deliveryFailed');
+  });
+
+  it('rejects a first name over 50 characters', async () => {
+    await render(<SignupWizard />);
+    await press('Élève');
+    await press('Suivant');
+    await fillIdentity('30');
+    await type('Prénom', 'x'.repeat(51));
+    await press('Suivant');
+    expect(screen.getByText('50 caractères au maximum')).toBeTruthy();
   });
 
   it('shows the check-email notice (not an error) when signUp returns no session', async () => {

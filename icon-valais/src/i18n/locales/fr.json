@@ -26,7 +26,13 @@
     "resetTitle": "Réinitialiser le mot de passe",
     "resetSend": "Envoyer le lien",
     "resetSent": "Si un compte existe pour cette adresse, un e-mail vient d'être envoyé.",
-    "backToLogin": "Retour à la connexion"
+    "backToLogin": "Retour à la connexion",
+    "newPasswordTitle": "Nouveau mot de passe",
+    "newPassword": "Nouveau mot de passe",
+    "updatePassword": "Changer le mot de passe",
+    "passwordUpdated": "Mot de passe modifié. Connectez-vous avec le nouveau mot de passe.",
+    "resetLinkInvalid": "Ce lien de réinitialisation est invalide ou a expiré. Demandez un nouveau lien.",
+    "samePassword": "Le nouveau mot de passe doit être différent de l'ancien."
   },
   "signup": {
     "title": "Créer un compte",
@@ -84,11 +90,6 @@
     "notFound": "Profil introuvable."
   },
   "belts": {
-    "white": "Blanche",
-    "blue": "Bleue",
-    "purple": "Violette",
-    "brown": "Marron",
-    "black": "Noire",
     "blanche": "Blanche",
     "grise": "Grise",
     "jaune": "Jaune",
@@ -100,16 +101,13 @@
     "noire": "Noire"
   },
   "sports": {
-    "bjj": "Jiu-jitsu brésilien",
     "mma": "MMA",
     "grappling": "Grappling",
-    "boxing": "Boxe",
     "jjb": "Jiu-jitsu brésilien"
   },
   "roles": {
     "member": "Membre",
-    "coach": "Coach",
-    "admin": "Administrateur"
+    "coach": "Coach"
   },
   "admin": {
     "title": "Administration",
@@ -142,7 +140,14 @@
     "forbidden": "Accès réservé aux administrateurs.",
     "notFound": "Compte introuvable.",
     "beltNone": "Aucune ceinture",
-    "saveBelt": "Enregistrer"
+    "saveBelt": "Enregistrer",
+    "childProfile": "Profil enfant (sans connexion) : toujours élève.",
+    "confirmOwnRole": "Vous allez changer votre propre rôle en « {{role}} » et perdre l'accès à l'administration. Confirmer ?",
+    "parentEmail": "E-mail du parent",
+    "parentEmailNone": "Aucune adresse",
+    "parentEmailEdit": "Nouvelle adresse du parent",
+    "parentEmailSave": "Enregistrer l'e-mail du parent",
+    "parentEmailSaved": "E-mail du parent enregistré."
   },
   "tabs": {
     "home": "Accueil",
@@ -176,7 +181,15 @@
     "consentRequiredForAge": "Modification refusée : tant que le consentement parental n'est pas donné, l'âge ne peut pas atteindre 16 ans.",
     "notAllowed": "Action non autorisée.",
     "beltAge": "Cette ceinture n'est pas autorisée pour cet âge.",
-    "notFound": "Élément introuvable."
+    "notFound": "Élément introuvable.",
+    "nameTooLong": "50 caractères au maximum",
+    "phoneTooLong": "30 caractères au maximum",
+    "textTooLong": "Texte trop long",
+    "lastAdmin": "Impossible : c'est le dernier administrateur. Nommez d'abord un autre administrateur.",
+    "lastAdminDelete": "Vous êtes le dernier administrateur : nommez un autre administrateur avant de supprimer votre compte.",
+    "childProfileRole": "Un profil enfant (sans connexion) ne peut pas recevoir de rôle.",
+    "childMustBeMinor": "Un profil enfant doit avoir moins de 18 ans.",
+    "ageLowerRequiresConsent": "Modification refusée : sans consentement parental, l'âge ne peut pas descendre sous 16 ans. Contactez un administrateur du club si votre âge est faux."
   },
   "pending": {
     "profTitle": "Compte en attente de validation",
@@ -190,6 +203,13 @@
     "notEligible": "Aucun e-mail ne peut être envoyé pour ce compte.",
     "unknownTitle": "Compte indisponible",
     "unknownBody": "Impossible de charger votre profil. Réessayez ou déconnectez-vous.",
-    "refresh": "Vérifier à nouveau"
+    "refresh": "Vérifier à nouveau",
+    "minorBodyNotSent": "Un parent doit confirmer votre inscription, mais l'e-mail n'a pas pu lui être envoyé. Utilisez le bouton ci-dessous pour réessayer.",
+    "parentEmailIs": "Adresse du parent : {{email}}",
+    "wrongAddress": "Adresse incorrecte ? Contactez un administrateur du club pour la corriger.",
+    "ownEmail": "L'adresse du parent doit être différente de la vôtre. Contactez un administrateur du club pour la corriger.",
+    "missingAddress": "Aucune adresse de parent n'est enregistrée. Contactez un administrateur du club.",
+    "locked": "L'adresse du parent ne peut plus être changée depuis l'application. Contactez un administrateur du club.",
+    "deliveryFailed": "L'e-mail n'a pas pu être envoyé. Réessayez plus tard."
   }
 }

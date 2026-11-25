@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { beltOptions } from './belts';
+import { charLength, LIMITS } from './limits';
 import { BELTS } from './types';
 
 export function needsParentConsent(age: number, createdByParent: boolean): boolean {
@@ -7,15 +8,21 @@ export function needsParentConsent(age: number, createdByParent: boolean): boole
 }
 
 const years = z.number().int('errors.yearsInvalid').min(0, 'errors.yearsInvalid');
+const name = z
+  .string()
+  .trim()
+  .min(1, 'errors.required')
+  .refine((s) => charLength(s) <= LIMITS.name, 'errors.nameTooLong');
+const longText = (max: number) => z.string().refine((s) => charLength(s) <= max, 'errors.textTooLong').optional();
 
 export const registrationSchema = z
   .object({
     role: z.enum(['eleve', 'prof', 'admin']),
-    firstName: z.string().trim().min(1, 'errors.required'),
-    lastName: z.string().trim().min(1, 'errors.required'),
+    firstName: name,
+    lastName: name,
     email: z.string().email('errors.invalidEmail'),
     password: z.string().min(8, 'errors.passwordTooShort'),
-    phone: z.string().optional(),
+    phone: z.string().refine((s) => charLength(s) <= LIMITS.phone, 'errors.phoneTooLong').optional(),
     age: z
       .number('errors.ageRange')
       .int('errors.ageRange')
@@ -27,9 +34,9 @@ export const registrationSchema = z
     yearsMma: years.optional(),
     parentEmail: z.string().email('errors.invalidEmail').optional(),
     coachYears: years.optional(),
-    trainingPlaces: z.string().optional(),
-    competitionAwards: z.string().optional(),
-    cv: z.string().optional(),
+    trainingPlaces: longText(LIMITS.trainingPlaces),
+    competitionAwards: longText(LIMITS.competitionAwards),
+    cv: longText(LIMITS.cv),
   })
   .superRefine((v, ctx) => {
     const add = (path: string, message: string) =>

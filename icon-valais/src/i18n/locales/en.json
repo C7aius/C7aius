@@ -26,7 +26,13 @@
     "resetTitle": "Reset password",
     "resetSend": "Send link",
     "resetSent": "If an account exists for this address, an email has just been sent.",
-    "backToLogin": "Back to sign in"
+    "backToLogin": "Back to sign in",
+    "newPasswordTitle": "New password",
+    "newPassword": "New password",
+    "updatePassword": "Change password",
+    "passwordUpdated": "Password changed. Log in with your new password.",
+    "resetLinkInvalid": "This reset link is invalid or has expired. Request a new link.",
+    "samePassword": "The new password must be different from the old one."
   },
   "signup": {
     "title": "Create an account",
@@ -84,11 +90,6 @@
     "notFound": "Profile not found."
   },
   "belts": {
-    "white": "White",
-    "blue": "Blue",
-    "purple": "Purple",
-    "brown": "Brown",
-    "black": "Black",
     "blanche": "White",
     "grise": "Grey",
     "jaune": "Yellow",
@@ -100,16 +101,13 @@
     "noire": "Black"
   },
   "sports": {
-    "bjj": "Brazilian Jiu-Jitsu",
     "mma": "MMA",
     "grappling": "Grappling",
-    "boxing": "Boxing",
     "jjb": "Brazilian jiu-jitsu"
   },
   "roles": {
     "member": "Member",
-    "coach": "Coach",
-    "admin": "Administrator"
+    "coach": "Coach"
   },
   "admin": {
     "title": "Administration",
@@ -142,7 +140,14 @@
     "forbidden": "Access restricted to administrators.",
     "notFound": "Account not found.",
     "beltNone": "No belt",
-    "saveBelt": "Save"
+    "saveBelt": "Save",
+    "childProfile": "Child profile (no login): always a student.",
+    "confirmOwnRole": "You are about to change your own role to \"{{role}}\" and lose access to administration. Confirm?",
+    "parentEmail": "Parent's email",
+    "parentEmailNone": "No address",
+    "parentEmailEdit": "New parent address",
+    "parentEmailSave": "Save parent's email",
+    "parentEmailSaved": "Parent's email saved."
   },
   "tabs": {
     "home": "Home",
@@ -176,7 +181,15 @@
     "consentRequiredForAge": "Change refused: until parental consent is given, the age cannot reach 16.",
     "notAllowed": "Action not allowed.",
     "beltAge": "This belt is not allowed for this age.",
-    "notFound": "Item not found."
+    "notFound": "Item not found.",
+    "nameTooLong": "50 characters maximum",
+    "phoneTooLong": "30 characters maximum",
+    "textTooLong": "Text too long",
+    "lastAdmin": "Not possible: this is the last administrator. Appoint another administrator first.",
+    "lastAdminDelete": "You are the last administrator: appoint another administrator before deleting your account.",
+    "childProfileRole": "A child profile (without login) cannot be given a role.",
+    "childMustBeMinor": "A child profile must be under 18.",
+    "ageLowerRequiresConsent": "Change refused: without parental consent, the age cannot go below 16. Contact a club administrator if your age is wrong."
   },
   "pending": {
     "profTitle": "Account awaiting approval",
@@ -190,6 +203,13 @@
     "notEligible": "No email can be sent for this account.",
     "unknownTitle": "Account unavailable",
     "unknownBody": "Your profile could not be loaded. Try again or sign out.",
-    "refresh": "Check again"
+    "refresh": "Check again",
+    "minorBodyNotSent": "A parent must confirm your sign-up, but the email could not be sent. Use the button below to try again.",
+    "parentEmailIs": "Parent's address: {{email}}",
+    "wrongAddress": "Wrong address? Contact a club administrator to correct it.",
+    "ownEmail": "The parent's address must be different from yours. Contact a club administrator to correct it.",
+    "missingAddress": "No parent address is saved. Contact a club administrator.",
+    "locked": "The parent's address can no longer be changed in the app. Contact a club administrator.",
+    "deliveryFailed": "The email could not be sent. Try again later."
   }
 }

@@ -12,6 +12,13 @@ if (!url || !anonKey) {
   );
 }
 
+/**
+ * Web : la page a-t-elle été ouverte depuis le lien « mot de passe oublié » ?
+ * Lu AVANT createClient, qui consomme puis efface le fragment #access_token=…&type=recovery.
+ */
+export const launchedFromRecoveryLink =
+  Platform.OS === 'web' && typeof window !== 'undefined' && /(^|[#&?])type=recovery(&|$)/.test(window.location?.hash ?? '');
+
 export const supabase = createClient<Database>(url, anonKey, {
   auth: {
     storage: Platform.OS === 'web' ? undefined : AsyncStorage,

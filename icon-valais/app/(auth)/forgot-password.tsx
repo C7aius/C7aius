@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text } from 'react-native';
 import { Link } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
+import { resetRedirectUrl } from '@/src/auth/passwordReset';
 import { Button, ErrorText, Field } from '@/src/components/ui';
 import { supabase } from '@/src/lib/supabase';
 import { colors } from '@/src/theme';
@@ -22,7 +23,7 @@ export default function ForgotPassword() {
     setBusy(true);
     setError(null);
     try {
-      const { error: e } = await supabase.auth.resetPasswordForEmail(email.trim());
+      const { error: e } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: resetRedirectUrl() });
       if (e) setError('errors.generic');
       else setSent(true);
     } catch {

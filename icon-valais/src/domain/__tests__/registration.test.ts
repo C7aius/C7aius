@@ -58,3 +58,24 @@ describe('registrationSchema', () => {
     if (!r.success) expect(r.error.issues.map((i) => i.message)).toContain('errors.ageRange');
   });
 });
+
+describe('registrationSchema length limits', () => {
+  const issues = (v: unknown) => {
+    const r = registrationSchema.safeParse(v);
+    return r.success ? [] : r.error.issues.map((i) => `${String(i.path[0])}:${i.message}`);
+  };
+  it('accepts 50-character names and rejects 51', () => {
+    expect(issues({ ...base, firstName: 'é'.repeat(50), lastName: 'x'.repeat(50) })).toEqual([]);
+    expect(issues({ ...base, firstName: 'x'.repeat(51) })).toEqual(['firstName:errors.nameTooLong']);
+    expect(issues({ ...base, lastName: 'x'.repeat(51) })).toEqual(['lastName:errors.nameTooLong']);
+  });
+  it('limits phone, training places, awards and cv', () => {
+    expect(issues({ ...base, phone: '1'.repeat(31) })).toEqual(['phone:errors.phoneTooLong']);
+    expect(issues({ ...base, phone: '1'.repeat(30) })).toEqual([]);
+    const prof = { ...base, role: 'prof' as const, coachYears: 3 };
+    expect(issues({ ...prof, trainingPlaces: 'x'.repeat(1001) })).toEqual(['trainingPlaces:errors.textTooLong']);
+    expect(issues({ ...prof, competitionAwards: 'x'.repeat(1001) })).toEqual(['competitionAwards:errors.textTooLong']);
+    expect(issues({ ...prof, cv: 'x'.repeat(3001) })).toEqual(['cv:errors.textTooLong']);
+    expect(issues({ ...prof, trainingPlaces: 'x'.repeat(1000), competitionAwards: 'x'.repeat(1000), cv: 'x'.repeat(3000) })).toEqual([]);
+  });
+});

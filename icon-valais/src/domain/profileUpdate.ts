@@ -1,4 +1,5 @@
 import type { Profile } from '@/src/auth/AuthProvider';
+import { charLength, LIMITS } from './limits';
 import type { Sport } from './types';
 
 export type ProfileFormValues = {
@@ -61,6 +62,11 @@ export function buildProfilePatch(
   const yg = years('yearsGrappling', v.yearsGrappling, v.sports.includes('grappling'));
   const ym = years('yearsMma', v.yearsMma, v.sports.includes('mma'));
 
+  const tooLong = (field: string, raw: string, max: number, key = 'errors.textTooLong') => {
+    if (charLength(raw.trim()) > max) errors[field] = key;
+  };
+  tooLong('phone', v.phone, LIMITS.phone, 'errors.phoneTooLong');
+
   const patch: ProfilePatch = {
     phone: v.phone.trim() === '' ? null : v.phone.trim(),
     age,
@@ -75,12 +81,16 @@ export function buildProfilePatch(
     patch.training_places = v.trainingPlaces.trim() || null;
     patch.competition_awards = v.competitionAwards.trim() || null;
     patch.cv = v.cv.trim() || null;
+    tooLong('trainingPlaces', v.trainingPlaces, LIMITS.trainingPlaces);
+    tooLong('competitionAwards', v.competitionAwards, LIMITS.competitionAwards);
+    tooLong('cv', v.cv, LIMITS.cv);
   }
   return Object.keys(errors).length ? { errors } : { patch };
 }
 
 /** Traduit une erreur Postgres/PostgREST en clé i18n. */
-export function profileErrorKey(error: { code?: string } | null | undefined): string {
+export function profileErrorKey(error: { code?: string; hint?: string | null } | null | undefined): string {
+  if (error?.hint === 'age_lower_requires_consent') return 'errors.ageLowerRequiresConsent';
   switch (error?.code) {
     case '23514':
       return 'errors.kidBeltAdult';

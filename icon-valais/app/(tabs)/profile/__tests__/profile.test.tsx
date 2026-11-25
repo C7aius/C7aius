@@ -76,7 +76,33 @@ describe('account deletion', () => {
   });
 });
 
+describe('account deletion: last admin', () => {
+  it('explains the 409 returned for the last admin', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: { context: { status: 409, json: async () => ({ error: 'last_admin' }) } } });
+    await render(<ProfileHome />);
+    await press('Supprimer mon compte');
+    await press('Continuer');
+    await press('Supprimer définitivement');
+    expect(await screen.findByText(i18n.t('errors.lastAdminDelete'))).toBeTruthy();
+    expect(mockSignOut).not.toHaveBeenCalled();
+  });
+});
+
 describe('children', () => {
+  it('refuses a child of 18 or more before calling the server', async () => {
+    await render(<Children />);
+    await waitFor(() => expect(screen.getByText('Ajouter un enfant')).toBeTruthy());
+    await fireEvent.changeText(screen.getByLabelText('Prénom'), 'Leo');
+    await fireEvent.changeText(screen.getByLabelText('Nom'), 'Roux');
+    await fireEvent.changeText(screen.getByLabelText('Âge'), '18');
+    await press('Grappling');
+    await fireEvent.changeText(screen.getByLabelText('Années de grappling'), '1');
+    await press('Ajouter');
+    expect(screen.getByText(i18n.t('errors.childMustBeMinor'))).toBeTruthy();
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+
   it('creates a child of 8 years via create_child_profile', async () => {
     await render(<Children />);
     await waitFor(() => expect(screen.getByText('Ajouter un enfant')).toBeTruthy());
@@ -111,6 +137,24 @@ describe('profile edit', () => {
     await fireEvent.changeText(screen.getByLabelText('Âge'), '19');
     await press('Enregistrer');
     await waitFor(() => expect(screen.getByText(i18n.t('errors.kidBeltAdult'))).toBeTruthy());
+  });
+
+  it('explains that the age cannot go below 16 without consent', async () => {
+    mockEq.mockResolvedValue({ error: { code: '42501', hint: 'age_lower_requires_consent' } });
+    await render(<Edit />);
+    await fireEvent.changeText(screen.getByLabelText('Âge'), '15');
+    await press('Enregistrer');
+    expect(await screen.findByText(i18n.t('errors.ageLowerRequiresConsent'))).toBeTruthy();
+  });
+
+  it('keeps the UI language when saving the language fails', async () => {
+    mockEq.mockResolvedValue({ error: { code: 'XX' } });
+    await render(<Edit />);
+    await press('Deutsch');
+    await waitFor(() => expect(mockEq).toHaveBeenCalledWith({ language: 'de' }, 'id', 'p1'));
+    expect(await screen.findByText('Une erreur est survenue')).toBeTruthy();
+    expect(i18n.language).toBe('fr');
+    expect(mockRefresh).not.toHaveBeenCalled();
   });
 
   it('persists the language and switches the UI', async () => {

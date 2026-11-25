@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/src/auth/AuthProvider';
 import { Button, ErrorText } from '@/src/components/ui';
+import { deleteAccountErrorKey } from '@/src/domain/functionErrors';
 import { displayRole } from '@/src/domain/roles';
 import { supabase } from '@/src/lib/supabase';
 import { colors } from '@/src/theme';
@@ -25,7 +26,7 @@ export default function ProfileHome() {
     try {
       const { error: e } = await supabase.functions.invoke('delete-account');
       if (e) {
-        setError('errors.generic');
+        setError(await deleteAccountErrorKey(e));
         return;
       }
       await signOut();

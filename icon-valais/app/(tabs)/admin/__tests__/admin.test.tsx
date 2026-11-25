@@ -6,6 +6,8 @@ import AdminList from '../index';
 import AdminUser from '../user/[id]';
 
 const mockRpc = jest.fn();
+const mockAuthRefresh = jest.fn();
+const mockUpdate = jest.fn();
 const mockPush = jest.fn();
 let mockRole = 'admin';
 let mockReady = true;
@@ -24,7 +26,7 @@ const prof = (id: string, first: string, prof_status: string | null, role = 'pro
 });
 
 jest.mock('@/src/auth/AuthProvider', () => ({
-  useAuth: () => ({ profile: mockReady ? { id: 'admin1', role: mockRole } : null, ready: mockReady }),
+  useAuth: () => ({ profile: mockReady ? { id: 'admin1', role: mockRole } : null, ready: mockReady, refresh: mockAuthRefresh }),
 }));
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush, back: jest.fn(), replace: jest.fn() }),
@@ -38,6 +40,7 @@ jest.mock('@/src/lib/supabase', () => ({
   supabase: {
     rpc: (...a: unknown[]) => mockRpc(...a),
     from: () => ({
+      update: (patch: unknown) => ({ eq: (...a: unknown[]) => mockUpdate(patch, ...a) }),
       select: () => ({
         order: async () => ({ data: mockRows, error: mockSelectError }),
         eq: (_c: string, id: string) => ({
@@ -66,6 +69,7 @@ beforeEach(async () => {
     prof('e1', 'Chloe', null, 'eleve'),
   ];
   mockRpc.mockResolvedValue({ data: null, error: null });
+  mockUpdate.mockResolvedValue({ error: null });
   await act(async () => {
     await i18n.changeLanguage('fr');
   });
@@ -200,6 +204,58 @@ describe('account detail', () => {
     await render(<AdminUser />);
     expect(screen.getByText(i18n.t('admin.forbidden'))).toBeTruthy();
     expect(mockRpc).not.toHaveBeenCalled();
+  });
+});
+
+describe('account detail: last admin, child profiles, parent email', () => {
+  it('asks for confirmation before an admin changes their own role', async () => {
+    mockRows.push(prof('admin1', 'Ada', null, 'admin'));
+    mockParams = { id: 'admin1' };
+    await render(<AdminUser />);
+    await waitFor(() => expect(screen.getByText('Élève')).toBeTruthy());
+    await press('Élève');
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(screen.getByText(i18n.t('admin.confirmOwnRole', { role: 'Élève' }))).toBeTruthy();
+    await press('Annuler');
+    expect(mockRpc).not.toHaveBeenCalled();
+    await press('Élève');
+    await press('Confirmer');
+    await waitFor(() => expect(mockRpc).toHaveBeenCalledWith('admin_set_role', { p_profile: 'admin1', p_role: 'eleve' }));
+    await waitFor(() => expect(mockAuthRefresh).toHaveBeenCalled());
+  });
+
+  it('shows the last-admin message', async () => {
+    mockRows.push(prof('admin1', 'Ada', null, 'admin'));
+    mockParams = { id: 'admin1' };
+    mockRpc.mockResolvedValue({ data: null, error: { code: '42501', hint: 'last_admin' } });
+    await render(<AdminUser />);
+    await waitFor(() => expect(screen.getByText('Élève')).toBeTruthy());
+    await press('Élève');
+    await press('Confirmer');
+    expect(await screen.findByText(i18n.t('errors.lastAdmin'))).toBeTruthy();
+  });
+
+  it('does not offer roles for a child profile', async () => {
+    mockRows.push({ ...prof('k1', 'Kid', null, 'eleve'), auth_user_id: null, parent_profile_id: 'x', age: 8 });
+    mockParams = { id: 'k1' };
+    await render(<AdminUser />);
+    await waitFor(() => expect(screen.getByText(i18n.t('admin.childProfile'))).toBeTruthy());
+    expect(screen.queryByText('Professeur')).toBeNull();
+  });
+
+  it('shows and edits the parent email', async () => {
+    mockRows.push({ ...prof('m1', 'Max', null, 'eleve'), age: 14, parent_email: 'tpyo@test.ch' });
+    mockParams = { id: 'm1' };
+    await render(<AdminUser />);
+    await waitFor(() => expect(screen.getByText('tpyo@test.ch')).toBeTruthy());
+    await fireEvent.changeText(screen.getByLabelText(i18n.t('admin.parentEmailEdit')), 'pas-un-email');
+    await press(i18n.t('admin.parentEmailSave'));
+    expect(screen.getByText(i18n.t('errors.invalidEmail'))).toBeTruthy();
+    expect(mockUpdate).not.toHaveBeenCalled();
+    await fireEvent.changeText(screen.getByLabelText(i18n.t('admin.parentEmailEdit')), ' Typo@Test.ch ');
+    await press(i18n.t('admin.parentEmailSave'));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith({ parent_email: 'typo@test.ch' }, 'id', 'm1'));
+    expect(await screen.findByText(i18n.t('admin.parentEmailSaved'))).toBeTruthy();
   });
 });
 

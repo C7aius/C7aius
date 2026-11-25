@@ -26,7 +26,13 @@
     "resetTitle": "Passwort zurücksetzen",
     "resetSend": "Link senden",
     "resetSent": "Falls für diese Adresse ein Konto existiert, wurde soeben eine E-Mail gesendet.",
-    "backToLogin": "Zurück zur Anmeldung"
+    "backToLogin": "Zurück zur Anmeldung",
+    "newPasswordTitle": "Neues Passwort",
+    "newPassword": "Neues Passwort",
+    "updatePassword": "Passwort ändern",
+    "passwordUpdated": "Passwort geändert. Melden Sie sich mit dem neuen Passwort an.",
+    "resetLinkInvalid": "Dieser Link zum Zurücksetzen ist ungültig oder abgelaufen. Fordern Sie einen neuen Link an.",
+    "samePassword": "Das neue Passwort muss sich vom alten unterscheiden."
   },
   "signup": {
     "title": "Konto erstellen",
@@ -84,11 +90,6 @@
     "notFound": "Profil nicht gefunden."
   },
   "belts": {
-    "white": "Weiss",
-    "blue": "Blau",
-    "purple": "Violett",
-    "brown": "Braun",
-    "black": "Schwarz",
     "blanche": "Weiss",
     "grise": "Grau",
     "jaune": "Gelb",
@@ -100,16 +101,13 @@
     "noire": "Schwarz"
   },
   "sports": {
-    "bjj": "Brasilianisches Jiu-Jitsu",
     "mma": "MMA",
     "grappling": "Grappling",
-    "boxing": "Boxen",
     "jjb": "Brasilianisches Jiu-Jitsu"
   },
   "roles": {
     "member": "Mitglied",
-    "coach": "Trainer",
-    "admin": "Administrator"
+    "coach": "Trainer"
   },
   "admin": {
     "title": "Verwaltung",
@@ -142,7 +140,14 @@
     "forbidden": "Zugriff nur für Administratoren.",
     "notFound": "Konto nicht gefunden.",
     "beltNone": "Kein Gürtel",
-    "saveBelt": "Speichern"
+    "saveBelt": "Speichern",
+    "childProfile": "Kinderprofil (ohne Login): immer Schüler.",
+    "confirmOwnRole": "Sie ändern Ihre eigene Rolle zu „{{role}}“ und verlieren den Zugang zur Administration. Bestätigen?",
+    "parentEmail": "E-Mail des Elternteils",
+    "parentEmailNone": "Keine Adresse",
+    "parentEmailEdit": "Neue Adresse des Elternteils",
+    "parentEmailSave": "E-Mail des Elternteils speichern",
+    "parentEmailSaved": "E-Mail des Elternteils gespeichert."
   },
   "tabs": {
     "home": "Start",
@@ -176,7 +181,15 @@
     "consentRequiredForAge": "Änderung abgelehnt: Solange die Einwilligung der Eltern fehlt, kann das Alter nicht 16 erreichen.",
     "notAllowed": "Aktion nicht erlaubt.",
     "beltAge": "Dieser Gürtel ist für dieses Alter nicht erlaubt.",
-    "notFound": "Eintrag nicht gefunden."
+    "notFound": "Eintrag nicht gefunden.",
+    "nameTooLong": "Höchstens 50 Zeichen",
+    "phoneTooLong": "Höchstens 30 Zeichen",
+    "textTooLong": "Text zu lang",
+    "lastAdmin": "Nicht möglich: Dies ist der letzte Administrator. Ernennen Sie zuerst einen anderen Administrator.",
+    "lastAdminDelete": "Sie sind der letzte Administrator: Ernennen Sie einen anderen Administrator, bevor Sie Ihr Konto löschen.",
+    "childProfileRole": "Einem Kinderprofil (ohne Login) kann keine Rolle zugewiesen werden.",
+    "childMustBeMinor": "Ein Kinderprofil muss unter 18 Jahre alt sein.",
+    "ageLowerRequiresConsent": "Änderung abgelehnt: Ohne Zustimmung der Eltern kann das Alter nicht unter 16 Jahre gesenkt werden. Wenden Sie sich an einen Administrator des Clubs, falls Ihr Alter falsch ist."
   },
   "pending": {
     "profTitle": "Konto wartet auf Freigabe",
@@ -190,6 +203,13 @@
     "notEligible": "Für dieses Konto kann keine E-Mail gesendet werden.",
     "unknownTitle": "Konto nicht verfügbar",
     "unknownBody": "Dein Profil konnte nicht geladen werden. Versuche es erneut oder melde dich ab.",
-    "refresh": "Erneut prüfen"
+    "refresh": "Erneut prüfen",
+    "minorBodyNotSent": "Ein Elternteil muss Ihre Anmeldung bestätigen, aber die E-Mail konnte nicht gesendet werden. Verwenden Sie die Schaltfläche unten, um es erneut zu versuchen.",
+    "parentEmailIs": "Adresse des Elternteils: {{email}}",
+    "wrongAddress": "Falsche Adresse? Wenden Sie sich an einen Administrator des Clubs, um sie zu korrigieren.",
+    "ownEmail": "Die Adresse des Elternteils muss sich von Ihrer unterscheiden. Wenden Sie sich an einen Administrator des Clubs, um sie zu korrigieren.",
+    "missingAddress": "Es ist keine Adresse eines Elternteils gespeichert. Wenden Sie sich an einen Administrator des Clubs.",
+    "locked": "Die Adresse des Elternteils kann in der App nicht mehr geändert werden. Wenden Sie sich an einen Administrator des Clubs.",
+    "deliveryFailed": "Die E-Mail konnte nicht gesendet werden. Versuchen Sie es später erneut."
   }
 }

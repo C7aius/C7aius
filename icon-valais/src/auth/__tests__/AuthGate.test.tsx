@@ -1,5 +1,6 @@
 import { act, render, waitFor } from '@testing-library/react-native';
 
+import i18n, { initI18n } from '@/src/i18n';
 import { AuthGate } from '../AuthGate';
 import { AuthProvider } from '../AuthProvider';
 
@@ -44,7 +45,10 @@ jest.mock('@/src/lib/supabase', () => ({
 const session = { user: { id: 'u1' } };
 const targets = () => mockReplace.mock.calls.map((c) => c[0]);
 
-beforeEach(() => {
+beforeAll(() => initI18n('fr'));
+
+beforeEach(async () => {
+  await i18n.changeLanguage('fr');
   jest.clearAllMocks();
   mockSession = null;
   mockSegments = [];
@@ -90,5 +94,32 @@ describe('AuthGate', () => {
     await act(async () => release());
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
     expect(targets()).not.toContain('/pending');
+  });
+
+  it('routes a PASSWORD_RECOVERY session to /reset-password, never to the tabs', async () => {
+    mockSegments = ['(auth)', 'login'];
+    mockProfile = { role: 'eleve', language: 'fr' };
+    await mount();
+    await waitFor(() => expect(mockReplace).not.toHaveBeenCalledWith('/'));
+    await act(async () => {
+      authCb?.('PASSWORD_RECOVERY', session);
+    });
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/reset-password'));
+    // déjà sur l'écran : pas de redirection vers les onglets même avec un compte actif
+    mockReplace.mockClear();
+    mockSegments = ['(auth)', 'reset-password'];
+    await act(async () => {
+      authCb?.('TOKEN_REFRESHED', { user: { id: 'u1' } });
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(targets()).not.toContain('/');
+    expect(targets()).not.toContain('/reset-password');
+  });
+
+  it('restores the language saved in the profile when it loads', async () => {
+    mockSession = session;
+    mockProfile = { role: 'eleve', language: 'de' };
+    await mount();
+    await waitFor(() => expect(i18n.language).toBe('de'));
   });
 });

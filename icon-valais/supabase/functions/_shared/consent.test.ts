@@ -5,6 +5,7 @@ import {
   confirmPageHtml,
   confirmFormHtml,
   decideSend,
+  emailSafeName,
   isUuid,
   pickLang,
   validateSendRequest,
@@ -164,4 +165,15 @@ Deno.test('decideSend: plafond de 5 demandes par 24 h', () => {
   // les demandes de plus de 24 h ne comptent pas
   const old = [25, 26, 27, 28, 29, 30].map((h) => ago(h * H));
   assertEquals(decideSend({ ...base, previousRequests: old }).ok, true);
+});
+
+Deno.test('buildConsentEmail: prénom tronqué à 50 caractères dans le sujet et le corps', () => {
+  const long = 'A'.repeat(500);
+  const { subject, html } = buildConsentEmail('fr', long, LINK);
+  assertFalse(subject.includes('A'.repeat(51)));
+  assertFalse(html.includes('A'.repeat(51)));
+  assertStringIncludes(subject, `${'A'.repeat(50)}…`);
+  assertEquals(emailSafeName('é'.repeat(60)), `${'é'.repeat(50)}…`);
+  assertEquals(emailSafeName(' Lea\r\nBcc: x '), 'Lea Bcc: x');
+  assertEquals(emailSafeName('Lea'), 'Lea');
 });

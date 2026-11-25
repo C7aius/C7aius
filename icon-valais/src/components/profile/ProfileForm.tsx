@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { Profile } from '@/src/auth/AuthProvider';
 import { Button, Chip, ErrorText, Field } from '@/src/components/ui';
+import { LIMITS } from '@/src/domain/limits';
 import { buildProfilePatch, profileErrorKey, valuesFromProfile, type ProfileFormValues } from '@/src/domain/profileUpdate';
 import type { Sport } from '@/src/domain/types';
 import { supabase } from '@/src/lib/supabase';
@@ -50,7 +51,7 @@ export function ProfileForm({ profile, onSaved }: { profile: Profile; onSaved: (
 
   return (
     <View>
-      <Field label={t('signup.phone')} value={v.phone} onChangeText={(phone) => set({ phone })} keyboardType="phone-pad" />
+      <Field label={t('signup.phone')} value={v.phone} onChangeText={(phone) => set({ phone })} keyboardType="phone-pad" maxLength={LIMITS.phone} error={err('phone')} />
       <Field label={t('signup.age')} value={v.age} onChangeText={(age) => set({ age })} keyboardType="number-pad" error={err('age')} />
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
@@ -70,9 +71,9 @@ export function ProfileForm({ profile, onSaved }: { profile: Profile; onSaved: (
       {profile.role === 'prof' ? (
         <>
           <Field label={t('signup.coachYears')} value={v.coachYears} onChangeText={(coachYears) => set({ coachYears })} keyboardType="number-pad" error={err('coachYears')} />
-          <Field label={t('signup.trainingPlaces')} value={v.trainingPlaces} onChangeText={(trainingPlaces) => set({ trainingPlaces })} />
-          <Field label={t('signup.competitionAwards')} value={v.competitionAwards} onChangeText={(competitionAwards) => set({ competitionAwards })} multiline />
-          <Field label={t('signup.cv')} value={v.cv} onChangeText={(cv) => set({ cv })} multiline />
+          <Field label={t('signup.trainingPlaces')} value={v.trainingPlaces} onChangeText={(trainingPlaces) => set({ trainingPlaces })} maxLength={LIMITS.trainingPlaces} error={err('trainingPlaces')} />
+          <Field label={t('signup.competitionAwards')} value={v.competitionAwards} onChangeText={(competitionAwards) => set({ competitionAwards })} multiline maxLength={LIMITS.competitionAwards} error={err('competitionAwards')} />
+          <Field label={t('signup.cv')} value={v.cv} onChangeText={(cv) => set({ cv })} multiline maxLength={LIMITS.cv} error={err('cv')} />
         </>
       ) : null}
 

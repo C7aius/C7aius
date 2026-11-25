@@ -11,7 +11,10 @@ const { chromium } = require('playwright');
 const BASE_URL = process.env.BASE_URL ?? 'http://localhost:8081';
 const SHOT_DIR = process.env.SHOT_DIR ?? './e2e-screenshots';
 const DB_CONTAINER = process.env.DB_CONTAINER ?? 'supabase_db_icon-valais';
+// Mailpit (ex-Inbucket) de la stack locale : `npx supabase status` → MAILPIT_URL
+const MAIL_URL = process.env.MAIL_URL ?? 'http://127.0.0.1:54324';
 const PASSWORD = 'motdepasse123';
+const NEW_PASSWORD = 'nouveaumotdepasse456';
 const stamp = Date.now();
 const emails = {
   student: `eleve.${stamp}@example.com`,
@@ -25,6 +28,21 @@ const results = [];
 
 function sql(query) {
   return execFileSync('docker', ['exec', DB_CONTAINER, 'psql', '-U', 'postgres', '-tAc', query], { encoding: 'utf8' });
+}
+
+// Dernier lien de réinitialisation reçu par `to` dans Mailpit (null si Mailpit est injoignable).
+async function resetLinkFor(to, tries = 20) {
+  for (let i = 0; i < tries; i++) {
+    const list = await fetch(`${MAIL_URL}/api/v1/search?query=${encodeURIComponent(`to:${to}`)}`).then((r) => r.json());
+    const msg = list.messages?.[0];
+    if (msg) {
+      const full = await fetch(`${MAIL_URL}/api/v1/message/${msg.ID}`).then((r) => r.json());
+      const m = /href="([^"]*\/auth\/v1\/verify[^"]*)"/.exec(full.HTML ?? '') ?? /(http\S*\/auth\/v1\/verify\S*)/.exec(full.Text ?? '');
+      if (m) return m[1].replace(/&amp;/g, '&');
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error(`aucun e-mail de réinitialisation pour ${to}`);
 }
 
 async function shot(page, name) {
@@ -62,10 +80,10 @@ async function signup(page, { email, role, age, parentEmail, firstName }) {
   await page.getByRole('button', { name: "S'inscrire" }).click();
 }
 
-async function login(page, email) {
+async function login(page, email, password = PASSWORD) {
   await page.goto(`${BASE_URL}/login`);
   await page.getByLabel('E-mail', { exact: true }).fill(email);
-  await page.getByLabel('Mot de passe', { exact: true }).fill(PASSWORD);
+  await page.getByLabel('Mot de passe', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Se connecter' }).click();
 }
 
@@ -135,9 +153,15 @@ await flow('4. Mineur (14 ans) : écran de consentement parental', async () => {
   const page = await newPage(browser);
   await signup(page, { email: emails.minor, role: 'eleve', age: 14, parentEmail: `parent.${stamp}@example.com`, firstName: 'Max' });
   await page.getByText('Consentement parental requis').waitFor();
+  await page.getByText(`parent.${stamp}@example.com`).waitFor();
+  // sans Resend configuré localement l'envoi échoue : l'écran ne doit pas prétendre l'inverse
+  await page.waitForTimeout(3000);
+  const notSent = await page.getByText("l'e-mail n'a pas pu lui être envoyé", { exact: false }).count();
+  const sent = await page.getByText("l'e-mail qui lui a été envoyé", { exact: false }).count();
   await shot(page, '4-minor-pending');
   await page.context().close();
-  return 'écran /pending consentement affiché (envoi e-mail non vérifié ici)';
+  if (notSent + sent !== 1) throw new Error(`texte d'envoi incohérent (notSent=${notSent}, sent=${sent})`);
+  return `adresse du parent affichée ; envoi ${notSent ? 'échoué → texte « non envoyé » + bouton renvoyer' : 'réussi'}`;
 });
 
 await flow('5. Profil : passage en Deutsch change les titres des onglets', async () => {
@@ -151,6 +175,44 @@ await flow('5. Profil : passage en Deutsch change les titres des onglets', async
   await shot(page, '5-profile-deutsch');
   await page.context().close();
   return 'Rangliste visible';
+});
+
+await flow('6. Langue enregistrée : reconnexion (nouvel onglet) puis rechargement, toujours en allemand', async () => {
+  const page = await newPage(browser); // navigateur en fr-CH : l'allemand vient du profil
+  await login(page, emails.student);
+  await page.getByText('Rangliste', { exact: true }).first().waitFor();
+  await page.reload();
+  await page.getByText('Rangliste', { exact: true }).first().waitFor();
+  await shot(page, '6-reload-deutsch');
+  await page.context().close();
+  return 'Rangliste après connexion et après rechargement';
+});
+
+await flow('7. Mot de passe oublié → lien Mailpit → nouveau mot de passe → connexion', async () => {
+  const reachable = await fetch(`${MAIL_URL}/api/v1/info`).then((r) => r.ok).catch(() => false);
+  if (!reachable) return `NON VÉRIFIÉ : Mailpit injoignable sur ${MAIL_URL}`;
+  const email = emails.prof; // compte en français
+  const page = await newPage(browser);
+  await page.goto(`${BASE_URL}/forgot-password`);
+  await page.getByLabel('E-mail', { exact: true }).fill(email);
+  await page.getByRole('button', { name: 'Envoyer le lien' }).click();
+  await page.getByText('Si un compte existe').waitFor();
+  const link = await resetLinkFor(email);
+  if (!decodeURIComponent(link).includes('/reset-password')) throw new Error(`redirect_to inattendu : ${link}`);
+  await page.goto(link);
+  await page.getByLabel('Nouveau mot de passe').waitFor();
+  await page.waitForTimeout(1000); // pas de redirection vers les onglets
+  if (!page.url().includes('reset-password')) throw new Error(`redirigé vers ${page.url()}`);
+  await shot(page, '7a-reset-form');
+  await page.getByLabel('Nouveau mot de passe').fill(NEW_PASSWORD);
+  await page.getByLabel('Confirmer le mot de passe').fill(NEW_PASSWORD);
+  await page.getByRole('button', { name: 'Changer le mot de passe' }).click();
+  await page.getByText('Mot de passe modifié').waitFor();
+  await login(page, email, NEW_PASSWORD);
+  await tabsVisible(page);
+  await shot(page, '7b-login-new-password');
+  await page.context().close();
+  return 'lien reçu, mot de passe changé, connexion avec le nouveau mot de passe';
 });
 
 await browser.close();

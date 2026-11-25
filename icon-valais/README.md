@@ -67,7 +67,9 @@ deno test --config supabase/functions/deno.json supabase/functions/_shared   # E
 
 `e2e/smoke.e2e.mjs` pilote l'application web contre la stack locale : inscription élève, inscription
 professeur (écran « en attente »), validation par un administrateur, inscription d'un mineur
-(écran de consentement parental) et changement de langue.
+(écran de consentement parental, adresse du parent affichée, pas de faux « e-mail envoyé »), changement
+de langue, langue conservée après reconnexion et rechargement, et « mot de passe oublié » de bout en bout
+(lien lu dans Mailpit, nouveau mot de passe, connexion).
 
 ```bash
 npx supabase start
@@ -76,10 +78,25 @@ SHOT_DIR=/tmp/e2e node e2e/smoke.e2e.mjs   # ou : npm run e2e
 ```
 
 Variables : `BASE_URL` (défaut `http://localhost:8081`), `SHOT_DIR` (captures d'écran),
+`MAIL_URL` (Mailpit, défaut `http://127.0.0.1:54324`, voir `npx supabase status` ; s'il est injoignable le
+flux « mot de passe oublié » est marqué NON VÉRIFIÉ),
 `DB_CONTAINER` (défaut `supabase_db_icon-valais`, utilisé via `docker exec` pour promouvoir
 l'administrateur de test). Le paquet `playwright` doit être résolvable par Node
 (`npm i -g playwright` puis `NODE_PATH=$(npm root -g)` si nécessaire). L'envoi réel de l'e-mail au
 parent n'est pas vérifié (Edge Functions non démarrées par ce script).
+
+Remarques : la stack locale limite l'envoi d'e-mails d'authentification (`auth.rate_limit.email_sent`,
+2 par heure) : relancer le test plusieurs fois dans l'heure peut faire échouer le flux « mot de passe
+oublié » (`npx supabase db reset` remet le compteur à zéro). Avec `CI=1`, Metro ne surveille pas les
+fichiers : relancer `expo start` après une modification du code.
+
+## Mot de passe oublié
+
+Le lien de l'e-mail ramène sur `/reset-password` : `<origine web>/reset-password` sur le web,
+`iconvalais://reset-password` sur mobile. Ces URL doivent être autorisées dans
+`auth.additional_redirect_urls` (`supabase/config.jsonc` pour la stack locale ; en production, ajouter
+l'URL web publique + `/reset-password` et `iconvalais://reset-password` dans le tableau de bord Supabase,
+Authentication > URL Configuration). Après modification de `config.jsonc` : `npx supabase stop && npx supabase start`.
 
 ## Créer le premier administrateur
 
@@ -89,6 +106,9 @@ en SQL avec le rôle `postgres` (Studio > SQL editor, ou `psql postgresql://post
 ```sql
 update profiles set role = 'admin' where email = 'admin@example.com';
 ```
+
+Le dernier administrateur ne peut ni se retirer le rôle admin ni supprimer son compte : nommer d'abord
+un autre administrateur.
 
 Les professeurs inscrits restent « en attente de validation » jusqu'à ce qu'un administrateur les
 valide dans l'onglet Admin (filtre « Profs en attente »).

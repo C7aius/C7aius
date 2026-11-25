@@ -5,7 +5,9 @@ import { useTranslation } from 'react-i18next';
 
 import { useAuth, type Profile } from '@/src/auth/AuthProvider';
 import { Button, Chip, ErrorText, Field } from '@/src/components/ui';
+import { rpcErrorKey } from '@/src/domain/adminErrors';
 import { beltOptions } from '@/src/domain/belts';
+import { charLength, LIMITS } from '@/src/domain/limits';
 import type { Belt, Sport } from '@/src/domain/types';
 import { supabase } from '@/src/lib/supabase';
 import { colors } from '@/src/theme';
@@ -49,8 +51,11 @@ export default function Children() {
   const submit = async () => {
     const e: Record<string, string> = {};
     if (!form.firstName.trim()) e.firstName = 'errors.required';
+    else if (charLength(form.firstName.trim()) > LIMITS.name) e.firstName = 'errors.nameTooLong';
     if (!form.lastName.trim()) e.lastName = 'errors.required';
+    else if (charLength(form.lastName.trim()) > LIMITS.name) e.lastName = 'errors.nameTooLong';
     if (age === undefined || age > 100) e.age = 'errors.ageRange';
+    else if (age >= 18) e.age = 'errors.childMustBeMinor';
     if (form.sports.length === 0) e.sports = 'errors.sportRequired';
     const yg = has('grappling') ? toInt(form.yg) : undefined;
     const ym = has('mma') ? toInt(form.ym) : undefined;
@@ -74,7 +79,7 @@ export default function Children() {
           years_mma: ym ?? null,
         },
       });
-      if (error) setMessage('errors.generic');
+      if (error) setMessage(rpcErrorKey(error) === 'errors.childMustBeMinor' ? 'errors.childMustBeMinor' : 'errors.generic');
       else {
         setForm(empty);
         await load();
@@ -97,8 +102,8 @@ export default function Children() {
       ))}
 
       <Text style={[styles.title, { marginTop: 24 }]}>{t('profile.addChild')}</Text>
-      <Field label={t('signup.firstName')} value={form.firstName} onChangeText={(firstName) => set({ firstName })} error={err('firstName')} />
-      <Field label={t('signup.lastName')} value={form.lastName} onChangeText={(lastName) => set({ lastName })} error={err('lastName')} />
+      <Field label={t('signup.firstName')} value={form.firstName} onChangeText={(firstName) => set({ firstName })} maxLength={LIMITS.name} error={err('firstName')} />
+      <Field label={t('signup.lastName')} value={form.lastName} onChangeText={(lastName) => set({ lastName })} maxLength={LIMITS.name} error={err('lastName')} />
       <Field label={t('signup.age')} value={form.age} onChangeText={(a) => set({ age: a })} keyboardType="number-pad" error={err('age')} />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
         {SPORTS.map((s) => (

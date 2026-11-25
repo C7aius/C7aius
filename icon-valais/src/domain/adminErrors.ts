@@ -1,5 +1,14 @@
 /** Traduit une erreur RPC (administration, ceintures) en clé i18n. */
-export function rpcErrorKey(error: { code?: string } | null | undefined): string {
+export function rpcErrorKey(error: { code?: string; hint?: string | null } | null | undefined): string {
+  // HINT stables posés par la base (migration 0004)
+  switch (error?.hint) {
+    case 'last_admin':
+      return 'errors.lastAdmin';
+    case 'child_profile_role':
+      return 'errors.childProfileRole';
+    case 'child_must_be_minor':
+      return 'errors.childMustBeMinor';
+  }
   switch (error?.code) {
     case '42501':
       return 'errors.notAllowed';

@@ -9,22 +9,37 @@ import { supabase } from '@/src/lib/supabase';
 
 const NAMES: Record<Lang, string> = { fr: 'Français', de: 'Deutsch', en: 'English', ru: 'Русский' };
 
-/** Change la langue de l'interface et l'enregistre dans profiles.language. */
+/**
+ * Enregistre la langue dans profiles.language, puis change la langue de
+ * l'interface — seulement si l'enregistrement a réussi (sinon l'interface
+ * reviendrait à l'ancienne langue au prochain chargement du profil).
+ */
 export function LanguagePicker() {
   const { t } = useTranslation();
   const { profile, refresh } = useAuth();
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const choose = async (lang: Lang) => {
+    if (busy) return;
     setError(null);
-    await i18n.changeLanguage(lang);
-    if (!profile) return;
+    if (!profile) {
+      await i18n.changeLanguage(lang);
+      return;
+    }
+    setBusy(true);
     try {
       const { error: e } = await supabase.from('profiles').update({ language: lang }).eq('id', profile.id);
-      if (e) setError('errors.generic');
-      else await refresh();
+      if (e) {
+        setError('errors.generic');
+        return;
+      }
+      await i18n.changeLanguage(lang);
+      await refresh();
     } catch {
       setError('errors.network');
+    } finally {
+      setBusy(false);
     }
   };
 

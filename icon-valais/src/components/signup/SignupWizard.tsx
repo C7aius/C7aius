@@ -3,6 +3,8 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/src/auth/AuthProvider';
+import { setConsentSendResult } from '@/src/auth/consentNotice';
+import { consentSendErrorKey } from '@/src/domain/functionErrors';
 import { Button, ErrorText } from '@/src/components/ui';
 import { needsParentConsent, registrationSchema } from '@/src/domain/registration';
 import type { Lang } from '@/src/i18n';
@@ -92,10 +94,15 @@ export function SignupWizard() {
         return;
       }
       if (needsParentConsent(input.age, false)) {
-        // Échec non bloquant : l'écran « en attente » permet de renvoyer l'e-mail.
-        await supabase.functions
-          .invoke('send-parent-consent', { body: { parent_email: input.parentEmail } })
-          .catch(() => undefined);
+        // Échec non bloquant : l'écran « en attente » l'indique et propose de renvoyer l'e-mail.
+        try {
+          const { error: sendError } = await supabase.functions.invoke('send-parent-consent', {
+            body: { parent_email: input.parentEmail },
+          });
+          setConsentSendResult(sendError ? await consentSendErrorKey(sendError) : null);
+        } catch {
+          setConsentSendResult('errors.network');
+        }
       }
       await refresh();
     } catch {

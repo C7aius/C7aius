@@ -144,17 +144,17 @@ select throws_ok($$ select public.create_child_profile('{"first_name":"K","last_
                  '42501', null, 'compte inactif : create_child_profile refusé');
 reset role;
 select pg_temp.login('11111111-1111-1111-1111-111111111111');
-select ok((select count(*)::int from public.public_profiles) >= 7, 'utilisateur actif : public_profiles lisible');
-select is((select display_role from public.public_profiles where id = pg_temp.pid('33333333-3333-3333-3333-333333333333')),
-          'eleve', 'prof en attente : display_role = eleve');
+select ok((select count(*)::int from public.public_profiles) >= 4, 'utilisateur actif : public_profiles lisible');
+select is((select count(*)::int from public.public_profiles where id = pg_temp.pid('33333333-3333-3333-3333-333333333333')),
+          0, 'prof en attente : absent de public_profiles');
 reset role;
 select pg_temp.login('44444444-4444-4444-4444-444444444444');
 select lives_ok($$ select public.admin_set_prof_status(pg_temp.pid('77777777-7777-7777-7777-777777777777'), 'refuse') $$,
                 'admin refuse un prof');
 reset role;
 select pg_temp.login('11111111-1111-1111-1111-111111111111');
-select is((select display_role from public.public_profiles where id = pg_temp.pid('77777777-7777-7777-7777-777777777777')),
-          'eleve', 'prof refusé : display_role = eleve');
+select is((select count(*)::int from public.public_profiles where id = pg_temp.pid('77777777-7777-7777-7777-777777777777')),
+          0, 'prof refusé : absent de public_profiles');
 reset role;
 
 -- ---------------------------------------------------------------------------
@@ -237,7 +237,7 @@ select throws_ok($$ update public.profiles set parent_profile_id = pg_temp.pid('
 select throws_ok($$ update public.profiles set age = 18 where id = (select v from ids where k = 'child') $$,
                  '23514', null, 'âge -> 18 avec ceinture enfant → refusé');
 select throws_ok($$ select public.create_child_profile('{"first_name":"Max","last_name":"Parent","age":20,"sports":["jjb"],"bjj_belt":"verte"}') $$,
-                 '23514', null, 'create_child_profile : ceinture enfant à 20 ans → refusée');
+                 '22023', null, 'create_child_profile : enfant de 20 ans (ceinture enfant) → refusé');
 reset role;
 select is((select public.is_account_active(p) from public.profiles p where id = (select v from ids where k = 'child')),
           true, 'enfant créé par un parent → actif sans consentement');

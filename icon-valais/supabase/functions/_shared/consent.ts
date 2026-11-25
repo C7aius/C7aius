@@ -58,12 +58,22 @@ const EMAIL_TEXTS: Record<
   },
 };
 
+export const EMAIL_NAME_MAX = 50;
+
+/** Prénom tel qu'inséré dans l'e-mail : une ligne, au plus EMAIL_NAME_MAX caractères (défense en profondeur). */
+export function emailSafeName(raw: string): string {
+  const oneLine = raw.replace(/[\r\n\t]+/g, ' ').trim();
+  const chars = Array.from(oneLine);
+  return chars.length > EMAIL_NAME_MAX ? `${chars.slice(0, EMAIL_NAME_MAX).join('')}…` : oneLine;
+}
+
 export function buildConsentEmail(
   lang: Lang,
-  childFirstName: string,
+  rawFirstName: string,
   link: string,
 ): { subject: string; html: string } {
   const t = EMAIL_TEXTS[lang] ?? EMAIL_TEXTS.fr;
+  const childFirstName = emailSafeName(rawFirstName);
   const name = escapeHtml(childFirstName);
   const href = escapeHtml(link);
   const html =
@@ -73,8 +83,8 @@ export function buildConsentEmail(
     `<p style="color:#555;font-size:13px">${t.expiry}<br>${t.ignore}</p>` +
     `<p style="color:#555;font-size:13px;word-break:break-all">${href}</p>` +
     `</body></html>`;
-  // le sujet est du texte brut (pas du HTML) : prénom non échappé
-  return { subject: t.subject(childFirstName.replace(/[\r\n]+/g, ' ')), html };
+  // le sujet est du texte brut (pas du HTML) : prénom non échappé (déjà sur une ligne)
+  return { subject: t.subject(childFirstName), html };
 }
 
 const PAGE_TEXTS: Record<Lang, { okTitle: string; okBody: string; koTitle: string; koBody: string }> = {
