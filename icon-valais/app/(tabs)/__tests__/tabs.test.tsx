@@ -2,6 +2,7 @@ import { act, render, screen } from '@testing-library/react-native';
 
 import i18n, { initI18n } from '@/src/i18n';
 import TabsLayout from '../_layout';
+import AdminLayout from '../admin/_layout';
 import Competition from '../competition/index';
 
 let mockProfile: { role: string } | null = null;
@@ -13,7 +14,8 @@ jest.mock('expo-router', () => {
   const Tabs = ({ children }: { children: unknown }) => <>{children}</>;
   Tabs.Screen = ({ name, options }: { name: string; options?: { title?: string; href?: null } }) =>
     options?.href === null ? null : <Text testID={`tab-${name}`}>{options?.title}</Text>;
-  return { Tabs };
+  const Stack = () => <Text testID="admin-stack">stack</Text>;
+  return { Tabs, Stack };
 });
 
 beforeAll(async () => {
@@ -30,13 +32,13 @@ describe('tabs layout', () => {
     mockProfile = { role };
     await render(<TabsLayout />);
     expect(screen.getByTestId('tab-profile')).toBeTruthy();
-    expect(screen.queryByTestId('tab-admin/index')).toBeNull();
+    expect(screen.queryByTestId('tab-admin')).toBeNull();
   });
 
   it('shows the Admin tab for the admin', async () => {
     mockProfile = { role: 'admin' };
     await render(<TabsLayout />);
-    expect(screen.getByTestId('tab-admin/index')).toBeTruthy();
+    expect(screen.getByTestId('tab-admin')).toBeTruthy();
   });
 
   it('retitles the Profile tab when the language changes to ru', async () => {
@@ -47,6 +49,21 @@ describe('tabs layout', () => {
       await i18n.changeLanguage('ru');
     });
     expect(screen.getByTestId('tab-profile').props.children).toBe('Профиль');
+  });
+});
+
+describe('admin layout', () => {
+  // Régression : sans Stack propre à /admin, router.push('/admin/user/[id]') retombait sur « / »
+  // (vérifié dans le navigateur) car la fiche était un onglet masqué du Tabs parent.
+  it('wraps the admin screens in their own Stack', async () => {
+    await render(<AdminLayout />);
+    expect(screen.getByTestId('admin-stack')).toBeTruthy();
+  });
+
+  it('does not register the account detail as a hidden tab', async () => {
+    mockProfile = { role: 'admin' };
+    await render(<TabsLayout />);
+    expect(screen.queryByTestId('tab-admin/user/[id]')).toBeNull();
   });
 });
 
