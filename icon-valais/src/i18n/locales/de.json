@@ -82,6 +82,14 @@
     "network": "Verbindungsproblem, bitte erneut versuchen",
     "required": "Dieses Feld ist erforderlich",
     "invalidEmail": "Ungültige E-Mail-Adresse",
-    "passwordTooShort": "Das Passwort ist zu kurz"
+    "passwordTooShort": "Das Passwort ist zu kurz",
+    "ageRange": "Das Alter muss eine ganze Zahl zwischen 0 und 100 sein",
+    "sportRequired": "Wähle mindestens eine Sportart",
+    "beltRequired": "Wähle einen Gürtel",
+    "beltInvalid": "Gürtel für dieses Alter nicht gültig",
+    "yearsRequired": "Gib die Jahre Erfahrung an",
+    "yearsInvalid": "Ungültige Anzahl Jahre",
+    "parentEmailRequired": "Die E-Mail eines Elternteils ist erforderlich",
+    "coachYearsRequired": "Gib deine Jahre als Trainer an"
   }
 }

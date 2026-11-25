@@ -82,6 +82,14 @@
     "network": "Connection problem, please try again",
     "required": "This field is required",
     "invalidEmail": "Invalid email address",
-    "passwordTooShort": "Password is too short"
+    "passwordTooShort": "Password is too short",
+    "ageRange": "Age must be a whole number between 0 and 100",
+    "sportRequired": "Choose at least one sport",
+    "beltRequired": "Choose a belt",
+    "beltInvalid": "Belt not valid for this age",
+    "yearsRequired": "Enter years of practice",
+    "yearsInvalid": "Invalid number of years",
+    "parentEmailRequired": "A parent's email is required",
+    "coachYearsRequired": "Enter your years of coaching experience"
   }
 }
