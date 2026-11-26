@@ -19,11 +19,17 @@
 --    est créé pour ce second intent → 'duplicate_refund' (remboursé
 --    automatiquement).
 --    apply_stripe_event transmet p_payment.
+--  * renew_membership : montant différent → paiement refund_pending (au lieu
+--    de failed) et abonnement annulé immédiatement (stripe_cancel_pending).
+--  * Paiement d'adhésion réglé sans intent connu (activate_membership,
+--    renew_membership) → 55000 missing_intent : refusé plutôt qu'enregistré
+--    sans pouvoir être remboursé ; le webhook résout l'intent de la facture
+--    auprès de Stripe avant d'appeler la base.
 --  * pg_cron : process-refunds toutes les 5 minutes via pg_net
 --    (invoke_process_refunds, mêmes secrets Vault que send-push), seulement
 --    s'il y a quelque chose à faire.
 --
--- HINTs stables : invalid_field.
+-- HINTs stables : invalid_field, missing_intent.
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -227,6 +233,12 @@ begin
   if v_m.source = 'stripe_subscription' and p_subscription is null then
     return 'awaiting_invoice';
   end if;
+  -- paiement réglé sans intent connu : il ne pourrait pas être remboursé ;
+  -- refusé (le webhook renvoie 500, Stripe réessaiera)
+  if v_p.id is not null and coalesce(v_p.stripe_payment_intent_id, p_payment_intent) is null then
+    raise exception 'activate_membership: payment intent unknown'
+      using errcode = '55000', hint = 'missing_intent';
+  end if;
   v_err := public.amount_mismatch(coalesce(v_p.amount, v_m.amount), p_amount_cents, p_currency);
   if v_err is not null then
     if v_p.id is not null then
@@ -276,6 +288,71 @@ begin
      where id = v_p.id;
   end if;
   return 'activated';
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 3b. renew_membership (0011) : montant différent → l'argent reçu est rendu
+-- (paiement refund_pending, facture gardée pour l'idempotence) et
+-- l'abonnement est annulé immédiatement chez Stripe (stripe_cancel_pending).
+-- Facture à enregistrer sans intent (p_intent null) → 55000 missing_intent
+-- (le webhook renvoie 500, Stripe réessaiera ; il résout l'intent avant).
+-- ---------------------------------------------------------------------------
+create or replace function public.renew_membership(
+  p_subscription text, p_invoice text, p_amount numeric, p_period_end date,
+  p_currency text default null, p_intent text default null
+) returns text
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_m public.memberships;
+  v_err text;
+  v_intent text;
+begin
+  if p_invoice is null or p_invoice = '' or p_period_end is null then
+    raise exception 'renew_membership: p_invoice and p_period_end are required'
+      using errcode = '22023', hint = 'invalid_field';
+  end if;
+  select * into v_m from public.memberships where stripe_subscription_id = p_subscription for update;
+  if v_m.id is null then
+    raise exception 'renew_membership: subscription not found' using errcode = 'P0002';
+  end if;
+  if exists (select 1 from public.payments where stripe_invoice_id = p_invoice) then
+    return 'already';
+  end if;
+
+  v_intent := case when p_intent is not null
+                     and not exists (select 1 from public.payments where stripe_payment_intent_id = p_intent)
+                   then p_intent end;
+  -- montant obligatoire (absent = 0) ; devise absente = chf
+  v_err := public.amount_mismatch(v_m.amount, round(coalesce(p_amount, 0) * 100)::bigint, coalesce(p_currency, 'chf'));
+  if coalesce(p_amount, 0) > 0 and p_intent is null then
+    raise exception 'renew_membership: payment intent unknown'
+      using errcode = '55000', hint = 'missing_intent';
+  end if;
+  if v_err is not null then
+    if coalesce(p_amount, 0) > 0 then
+      insert into public.payments (kind, payer_profile_id, beneficiary_profile_id, membership_id, amount,
+                                   method, stripe_invoice_id, stripe_payment_intent_id, status, error, description,
+                                   paid_at)
+      values ('membership', v_m.paid_by, v_m.profile_id, v_m.id, p_amount, 'card', p_invoice, v_intent,
+              'refund_pending', v_err, format('Adhésion %s mois (abonnement), renouvellement', v_m.months), now());
+      -- Stripe ne doit plus facturer ce montant : annulation immédiate
+      update public.memberships set stripe_cancel_pending = true, auto_renew = false where id = v_m.id;
+    end if;
+    return 'amount_mismatch';
+  end if;
+
+  insert into public.payments (kind, payer_profile_id, beneficiary_profile_id, membership_id, amount,
+                               method, stripe_invoice_id, stripe_payment_intent_id, status, description, paid_at)
+  values ('membership', v_m.paid_by, v_m.profile_id, v_m.id, p_amount, 'card', p_invoice, v_intent, 'succeeded',
+          format('Adhésion %s mois (abonnement), renouvellement jusqu''au %s',
+                 v_m.months, to_char(p_period_end, 'DD.MM.YYYY')),
+          now());
+  update public.memberships
+     set ends_on = greatest(coalesce(ends_on, p_period_end), p_period_end),
+         starts_on = coalesce(starts_on, (now() at time zone 'Europe/Zurich')::date)
+   where id = v_m.id;
+  return 'renewed';
 end;
 $$;
 
@@ -393,6 +470,7 @@ select cron.schedule('process-refunds', '*/5 * * * *', 'select public.invoke_pro
 revoke all on function public.confirm_payment(text, text, bigint, text, uuid) from public, anon, authenticated;
 revoke all on function public.activate_membership(text, text, date, uuid, text, bigint, text)
   from public, anon, authenticated;
+revoke all on function public.renew_membership(text, text, numeric, date, text, text) from public, anon, authenticated;
 revoke all on function public.subscriptions_to_cancel(int) from public, anon, authenticated;
 revoke all on function public.mark_subscription_cancelled(uuid) from public, anon, authenticated;
 revoke all on function public.apply_stripe_event(text, text, text, jsonb) from public, anon, authenticated;
@@ -400,6 +478,7 @@ revoke all on function public.invoke_process_refunds() from public, anon, authen
 
 grant execute on function public.confirm_payment(text, text, bigint, text, uuid) to service_role;
 grant execute on function public.activate_membership(text, text, date, uuid, text, bigint, text) to service_role;
+grant execute on function public.renew_membership(text, text, numeric, date, text, text) to service_role;
 grant execute on function public.subscriptions_to_cancel(int) to service_role;
 grant execute on function public.mark_subscription_cancelled(uuid) to service_role;
 grant execute on function public.apply_stripe_event(text, text, text, jsonb) to service_role;

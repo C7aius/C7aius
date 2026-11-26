@@ -28,6 +28,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const MEMBERSHIP_PRODUCT_ID = 'icon_valais_membership';
 const MEMBERSHIP_PRODUCT_NAME = 'Adhésion Icon Valais Conthey';
 
+// Affiché sous le bouton de paiement Stripe Checkout d'un cours.
+export const COURSE_REFUND_NOTICE = 'Remboursé uniquement si le cours est annulé par le professeur.';
+
 export type Result = { status: number; body: Record<string, unknown> };
 
 // ---------------------------------------------------------------------------
@@ -112,18 +115,18 @@ export function buildCheckoutParams(row: CheckoutRow, successUrl: string, cancel
     p['payment_method_types[0]'] = 'card';
     p['payment_method_types[1]'] = 'twint';
     p['payment_intent_data[description]'] = row.description;
+    if (row.booking_id) p['custom_text[submit][message]'] = COURSE_REFUND_NOTICE;
     Object.assign(p, metadata('payment_intent_data[metadata]', row));
   }
   return p;
 }
 
-// Origine de l'app web : PUBLIC_APP_URL (sans / final), sinon l'origine de
-// l'en-tête Origin. http(s) seulement ; null si aucune.
-export function resolveAppOrigin(publicAppUrl: string | undefined, originHeader: string | null): string | null {
-  const fromEnv = parseHttp(publicAppUrl);
-  if (fromEnv) return fromEnv.href.replace(/\/+$/, '');
-  const fromHeader = parseHttp(originHeader);
-  return fromHeader ? fromHeader.origin : null;
+// Base de l'app web : PUBLIC_APP_URL (sans / final), http(s) seulement ;
+// null sinon. L'en-tête Origin n'est jamais utilisé (retour Stripe vers une
+// adresse choisie par l'appelant).
+export function resolveAppOrigin(publicAppUrl: string | undefined): string | null {
+  const u = parseHttp(publicAppUrl);
+  return u ? u.href.replace(/\/+$/, '') : null;
 }
 
 function parseHttp(v: string | null | undefined): URL | null {
@@ -247,8 +250,11 @@ export async function handleCreatePayment(req: Request, deps: CreatePaymentDeps)
   }
   let origin: string | null = null;
   if (body.platform === 'web') {
-    origin = resolveAppOrigin(deps.publicAppUrl, req.headers.get('Origin'));
-    if (!origin) return { status: 400, body: { error: 'missing_origin' } };
+    origin = resolveAppOrigin(deps.publicAppUrl);
+    if (!origin) {
+      console.error('create-payment: PUBLIC_APP_URL is not set');
+      return { status: 500, body: { error: 'not_configured' } };
+    }
   }
 
   const payer = await deps.payer(authUser);
@@ -313,14 +319,23 @@ export async function handleCreatePayment(req: Request, deps: CreatePaymentDeps)
           customer,
         ),
         `sub-${row.payment_id}`,
-      )) as { latest_invoice?: { payment_intent?: PI | string | null } | null };
+      )) as { id: string; latest_invoice?: { payment_intent?: PI | string | null } | null };
       const inv = sub.latest_invoice?.payment_intent;
       if (!inv || typeof inv === 'string' || !inv.client_secret) {
         throw new StripeError(200, null, 'missing_payment_intent', 'subscription without first invoice payment intent');
       }
       pi = inv;
       // intent de la première facture lié au paiement (remboursement possible)
-      await deps.attachIntent(row.payment_id, pi.id);
+      const use = await deps.attachIntent(row.payment_id, pi.id);
+      if (use !== pi.id) {
+        // paiement déjà lié à un autre intent : cet abonnement est abandonné
+        try {
+          await stripe(`subscriptions/${sub.id}`, {}, `cancel-now-sub-${row.payment_id}`, 'DELETE');
+        } catch (e) {
+          console.error('create-payment: could not cancel unused subscription', e instanceof StripeError ? e.code ?? e.status : 'unknown');
+        }
+        return { status: 409, body: { error: 'payment_conflict' } };
+      }
     } else if (row.existingIntent) {
       pi = (await stripe(`payment_intents/${row.existingIntent}`, {}, undefined, 'GET')) as PI;
     } else {
@@ -477,6 +492,12 @@ export type ProcessRefundsDeps = {
 
 export const REFUND_BATCH = 20;
 
+// statut / code Stripe, ou le nom de l'erreur (jamais de message Stripe)
+function errInfo(e: unknown): string {
+  if (e instanceof StripeError) return `${e.status} ${e.code ?? '-'}`;
+  return e instanceof Error ? e.name : 'unknown';
+}
+
 // Erreur Stripe qui signifie « déjà fait » (rien à refaire).
 export function refundAlreadyDone(e: unknown): boolean {
   return e instanceof StripeError && e.code === 'charge_already_refunded';
@@ -503,39 +524,43 @@ export async function handleProcessRefunds(req: Request, deps: ProcessRefundsDep
   // 1. Abonnements à annuler tout de suite (première facture au mauvais
   //    montant) : Stripe ne doit plus facturer
   for (const s of await deps.subscriptionsToCancel(REFUND_BATCH)) {
+    // chaque ligne isolée : une erreur (Stripe, réseau, base) la laisse pour
+    // le passage suivant sans interrompre le lot
     try {
-      await stripeRequest(`subscriptions/${s.stripe_subscription_id}`, {}, key, deps.fetch, `cancel-now-${s.membership_id}`, 'DELETE');
-    } catch (e) {
-      if (!subscriptionAlreadyGone(e)) {
-        failed++;
-        console.error('process-refunds: subscription cancel failed', s.membership_id, e instanceof StripeError ? `${e.status} ${e.code ?? '-'}` : 'unknown');
-        continue; // laissé pour le passage suivant
+      try {
+        await stripeRequest(`subscriptions/${s.stripe_subscription_id}`, {}, key, deps.fetch, `cancel-now-${s.membership_id}`, 'DELETE');
+      } catch (e) {
+        if (!subscriptionAlreadyGone(e)) throw e;
       }
+      await deps.markSubscriptionCancelled(s.membership_id);
+      cancelled++;
+    } catch (e) {
+      failed++;
+      console.error('process-refunds: subscription cancel failed', s.membership_id, errInfo(e));
     }
-    await deps.markSubscriptionCancelled(s.membership_id);
-    cancelled++;
   }
 
   // 2. Remboursements (montant total de l'intent)
   for (const r of await deps.refundsToProcess(REFUND_BATCH)) {
     if (!r.stripe_payment_intent_id) continue;
     try {
-      await stripeRequest(
-        'refunds',
-        { payment_intent: r.stripe_payment_intent_id, 'metadata[payment_id]': r.id },
-        key,
-        deps.fetch,
-        `refund-${r.id}`,
-      );
-    } catch (e) {
-      if (!refundAlreadyDone(e)) {
-        failed++;
-        console.error('process-refunds: refund failed', r.id, e instanceof StripeError ? `${e.status} ${e.code ?? '-'}` : 'unknown');
-        continue; // laissé pour le passage suivant
+      try {
+        await stripeRequest(
+          'refunds',
+          { payment_intent: r.stripe_payment_intent_id, 'metadata[payment_id]': r.id },
+          key,
+          deps.fetch,
+          `refund-${r.id}`,
+        );
+      } catch (e) {
+        if (!refundAlreadyDone(e)) throw e;
       }
+      await deps.markRefunded(r.id);
+      refunded++;
+    } catch (e) {
+      failed++;
+      console.error('process-refunds: refund failed', r.id, errInfo(e));
     }
-    await deps.markRefunded(r.id);
-    refunded++;
   }
   return { status: 200, body: { refunded, cancelled, failed } };
 }

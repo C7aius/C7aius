@@ -1,4 +1,5 @@
-// GET ?payment=<id>[&lang=fr|de|en|ru] (utilisateur connecté) : quittance PDF
+// GET ?payment=<id>[&lang=fr|de|en|ru] (utilisateur connecté ; jeton invalide → 401) :
+// quittance PDF. Paiement avec note d'erreur (argent rendu) → 409.
 // (application/pdf). Le paiement est lu avec le jeton de l'appelant : la RLS
 // payments_select n'en laisse voir qu'au payeur, au bénéficiaire, au parent du
 // bénéficiaire et à l'admin (sinon 404). Les noms sont ensuite lus avec le
@@ -22,11 +23,15 @@ Deno.serve(async (req) => {
   const db = serviceClient();
   try {
     return await handleReceipt(req, {
+      async authenticate(jwt) {
+        const { data, error } = await db.auth.getUser(jwt);
+        return error || !data.user ? null : data.user.id;
+      },
       async loadVisibleReceipt(id, jwt) {
         // RLS : invisible → null
         const { data: p, error } = await userClient(jwt)
           .from('payments')
-          .select('id, receipt_no, payer_profile_id, beneficiary_profile_id, amount, currency, method, status, description, paid_at, refunded_at')
+          .select('id, receipt_no, payer_profile_id, beneficiary_profile_id, amount, currency, method, status, description, paid_at, refunded_at, error')
           .eq('id', id)
           .maybeSingle();
         if (error) throw new Error(`payment lookup: ${error.message}`);
@@ -46,12 +51,11 @@ Deno.serve(async (req) => {
           method: p.method,
           status: p.status,
           refundedAt: p.refunded_at,
+          error: p.error,
         } as ReceiptData;
       },
-      async viewerLanguage(jwt) {
-        const { data: u } = await db.auth.getUser(jwt);
-        if (!u?.user) return null;
-        const { data } = await db.from('profiles').select('language').eq('auth_user_id', u.user.id).maybeSingle();
+      async viewerLanguage(authUserId) {
+        const { data } = await db.from('profiles').select('language').eq('auth_user_id', authUserId).maybeSingle();
         return data?.language ?? null;
       },
     });

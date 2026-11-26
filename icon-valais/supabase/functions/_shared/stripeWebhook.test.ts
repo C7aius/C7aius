@@ -1,5 +1,6 @@
 import { assert, assertEquals, assertFalse } from 'jsr:@std/assert@1';
 import {
+  fetchInvoicePaymentIntent,
   handleStripeWebhook,
   routeStripeEvent,
   unixToZurichDate,
@@ -437,4 +438,78 @@ Deno.test('handleStripeWebhook: ne journalise ni le secret, ni la signature, ni 
   } finally {
     Object.assign(console, orig);
   }
+});
+
+// ---------------------------------------------------------------------------
+// invoice.paid sans payment_intent (format récent de l'API) : intent résolu
+// auprès de Stripe avant apply_stripe_event
+// ---------------------------------------------------------------------------
+const NO_INTENT = (reason: string) =>
+  JSON.stringify({
+    id: `evt_${reason}`,
+    type: 'invoice.paid',
+    data: { object: invoice(reason, { payment_intent: undefined }) },
+  });
+
+Deno.test('handleStripeWebhook: invoice.paid sans intent → résolu (resolveInvoiceIntent) puis appliqué', async () => {
+  const asked: string[] = [];
+  for (const [reason, key] of [['subscription_create', 'p_payment_intent'], ['subscription_cycle', 'p_intent']]) {
+    const { deps: d, log } = deps({
+      resolveInvoiceIntent: (inv) => {
+        asked.push(inv);
+        return Promise.resolve('pi_resolved');
+      },
+    });
+    const body = NO_INTENT(reason);
+    const res = await handleStripeWebhook(await post(body, await sign(body)), d);
+    assertEquals(res.status, 200);
+    assertEquals(log.applied[0].args[key], 'pi_resolved');
+  }
+  assertEquals(asked, ['in_1', 'in_1']);
+});
+
+Deno.test('handleStripeWebhook: intent présent → pas de résolution ; résolution en échec → 500, rien appliqué', async () => {
+  let called = 0;
+  const { deps: d1 } = deps({ resolveInvoiceIntent: () => (called++, Promise.resolve('x')) });
+  const withIntent = JSON.stringify({ id: 'evt_w', type: 'invoice.paid', data: { object: invoice('subscription_create') } });
+  assertEquals((await handleStripeWebhook(await post(withIntent, await sign(withIntent)), d1)).status, 200);
+  assertEquals(called, 0);
+  const { deps: d2, log } = deps({ resolveInvoiceIntent: () => Promise.reject(new Error('stripe down')) });
+  const body = NO_INTENT('subscription_create');
+  const res = await handleStripeWebhook(await post(body, await sign(body)), d2);
+  assertEquals(res.status, 500);
+  assertEquals(log.applied, []);
+});
+
+function invoiceFetch(routes: Record<string, { status?: number; body: unknown }>, seen: string[]): typeof fetch {
+  return ((input: string | URL | Request, init?: RequestInit) => {
+    const u = new URL(String(input));
+    seen.push(`${init?.method} ${u.pathname}${u.search} ${new Headers(init?.headers).get('Stripe-Version')}`);
+    const r = routes[`${u.pathname}${u.search}`] ?? { status: 404, body: { error: { code: 'resource_missing', message: 'x' } } };
+    return Promise.resolve(new Response(JSON.stringify(r.body), { status: r.status ?? 200 }));
+  }) as typeof fetch;
+}
+
+Deno.test('fetchInvoicePaymentIntent: GET /v1/invoices/<id> (version épinglée), sinon /v1/invoice_payments', async () => {
+  const seen: string[] = [];
+  assertEquals(
+    await fetchInvoicePaymentIntent('in_1', 'sk', invoiceFetch({ '/v1/invoices/in_1': { body: { id: 'in_1', payment_intent: 'pi_a' } } }, seen)),
+    'pi_a',
+  );
+  assertEquals(seen, ['GET /v1/invoices/in_1 2024-06-20']);
+  const seen2: string[] = [];
+  assertEquals(
+    await fetchInvoicePaymentIntent(
+      'in_2',
+      'sk',
+      invoiceFetch({
+        '/v1/invoices/in_2': { body: { id: 'in_2' } },
+        '/v1/invoice_payments?invoice=in_2': { body: { data: [{ payment: { type: 'payment_intent', payment_intent: 'pi_b' } }] } },
+      }, seen2),
+    ),
+    'pi_b',
+  );
+  assertEquals(seen2.length, 2);
+  // rien trouvé : null (la base refusera, Stripe réessaiera)
+  assertEquals(await fetchInvoicePaymentIntent('in_3', 'sk', invoiceFetch({ '/v1/invoices/in_3': { body: { id: 'in_3' } } }, [])), null);
 });

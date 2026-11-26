@@ -7,12 +7,15 @@
 // Événements à cocher dans Stripe : payment_intent.succeeded,
 // payment_intent.payment_failed, invoice.paid, customer.subscription.updated,
 // customer.subscription.deleted, charge.refunded.
+// invoice.paid sans payment_intent (format récent) : intent demandé à Stripe
+// (STRIPE_SECRET_KEY, version épinglée) avant apply_stripe_event.
 // Ne journalise ni le secret, ni la signature, ni le corps de l'événement.
 import { json, serviceClient } from '../_shared/http.ts';
-import { handleStripeWebhook } from '../_shared/stripeWebhook.ts';
+import { fetchInvoicePaymentIntent, handleStripeWebhook } from '../_shared/stripeWebhook.ts';
 
 Deno.serve(async (req) => {
   const db = serviceClient();
+  const stripeKey = Deno.env.get('STRIPE_SECRET_KEY') || undefined;
   try {
     const res = await handleStripeWebhook(req, {
       secret: Deno.env.get('STRIPE_WEBHOOK_SECRET') || undefined,
@@ -22,6 +25,8 @@ Deno.serve(async (req) => {
         if (error) throw new Error(`apply_stripe_event(${fn}): ${error.code ?? ''} ${error.message}`);
         return String(data);
       },
+      // facture sans payment_intent dans l'événement : demandé à Stripe
+      resolveInvoiceIntent: stripeKey ? (invoiceId) => fetchInvoicePaymentIntent(invoiceId, stripeKey) : undefined,
     });
     return json(res.status, res.body);
   } catch (e) {

@@ -28,6 +28,8 @@ export type ReceiptData = {
   method: string | null;
   status: ReceiptStatus;
   refundedAt?: string | null;
+  // note d'erreur du paiement (montant différent, double paiement) : pas de quittance
+  error?: string | null;
 };
 
 type Texts = {
@@ -161,10 +163,12 @@ export async function buildReceiptPdf(r: ReceiptData, lang: Lang): Promise<Uint8
 // Requête GET ?payment=<id>[&lang=fr|de|en|ru]
 // ---------------------------------------------------------------------------
 export type ReceiptDeps = {
+  // utilisateur auth du jeton (GoTrue), null si invalide / expiré
+  authenticate(jwt: string): Promise<string | null>;
   // paiement lu AVEC le jeton de l'appelant (RLS payments_select : payeur,
   // bénéficiaire, parent du bénéficiaire, admin) ; null si invisible
   loadVisibleReceipt(paymentId: string, jwt: string): Promise<ReceiptData | null>;
-  viewerLanguage(jwt: string): Promise<string | null>;
+  viewerLanguage(authUserId: string): Promise<string | null>;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -186,13 +190,18 @@ export async function handleReceipt(req: Request, deps: ReceiptDeps): Promise<Re
   const id = url.searchParams.get('payment') ?? '';
   if (!UUID.test(id)) return jsonRes(400, { error: 'invalid_payment' });
 
+  const authUser = await deps.authenticate(m[1]);
+  if (!authUser) return jsonRes(401, { error: 'unauthorized' });
+
   const r = await deps.loadVisibleReceipt(id, m[1]);
   if (!r) return jsonRes(404, { error: 'not_found' });
   if (r.status !== 'succeeded' && r.status !== 'refund_pending' && r.status !== 'refunded') {
     return jsonRes(409, { error: 'not_paid' });
   }
+  // argent rendu pour une anomalie : ce n'est pas un paiement à quittancer
+  if (r.error) return jsonRes(409, { error: 'not_receiptable' });
   const q = url.searchParams.get('lang');
-  const lang = q && (LANGS as readonly string[]).includes(q) ? (q as Lang) : normalizeLang(await deps.viewerLanguage(m[1]));
+  const lang = q && (LANGS as readonly string[]).includes(q) ? (q as Lang) : normalizeLang(await deps.viewerLanguage(authUser));
   const pdf = await buildReceiptPdf(r, lang);
   return new Response(pdf.slice().buffer as ArrayBuffer, {
     status: 200,

@@ -116,6 +116,7 @@ Deno.test('buildReceiptPdf: bénéficiaire omis s\'il est le payeur ; remboursé
 // ---------------------------------------------------------------------------
 function deps(over: Partial<ReceiptDeps> = {}): ReceiptDeps {
   return {
+    authenticate: (jwt) => Promise.resolve(jwt === 'jwt' ? 'auth-user-1' : null),
     loadVisibleReceipt: () => Promise.resolve(DATA),
     viewerLanguage: () => Promise.resolve('de'),
     ...over,
@@ -155,4 +156,22 @@ Deno.test('receipt: sans jeton 401 ; id invalide 400 ; invisible 404 ; non payé
   const post = new Request(`http://localhost/receipt?payment=${PAY}`, { method: 'POST', headers: { Authorization: 'Bearer jwt' } });
   assertEquals((await handleReceipt(post, deps())).status, 405);
   assert(true);
+});
+
+Deno.test('receipt: jeton invalide ou expiré → 401 (pas 500), sans lecture du paiement', async () => {
+  let read = 0;
+  const res = await handleReceipt(
+    new Request(`http://localhost/receipt?payment=${PAY}`, { headers: { Authorization: 'Bearer expired' } }),
+    deps({ loadVisibleReceipt: () => (read++, Promise.resolve(DATA)) }),
+  );
+  assertEquals(res.status, 401);
+  assertEquals(read, 0);
+});
+
+Deno.test('receipt: paiement avec note d\'erreur (montant différent, double paiement) → 409', async () => {
+  for (const error of ['amount_mismatch: received 1500 chf, expected 2000 chf', 'duplicate_intent']) {
+    const res = await handleReceipt(get(`?payment=${PAY}`), deps({ loadVisibleReceipt: () => Promise.resolve({ ...DATA, status: 'refund_pending', error }) }));
+    assertEquals(res.status, 409);
+    assertEquals((await res.json()).error, 'not_receiptable');
+  }
 });

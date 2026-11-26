@@ -2,11 +2,12 @@
 // Corps : { kind: 'course', bookingId, platform } ou
 //         { kind: 'membership', profileId, months, method: 'card' | 'twint', platform }
 // platform 'native' → { paymentIntentClientSecret, customerId, ephemeralKeySecret, publishableKey, amount }
-// platform 'web'    → { checkoutUrl } (retour <PUBLIC_APP_URL | Origin>/payment-result?status=success|cancel&payment=<id>)
+// platform 'web'    → { checkoutUrl } (retour <PUBLIC_APP_URL>/payment-result?status=success|cancel&payment=<id>)
 // Droit de payer et montant : en base (start_course_payment /
 // start_membership_payment) avant tout appel Stripe ; le montant du corps est
 // ignoré. Logique dans _shared/payments.ts. Secrets : STRIPE_SECRET_KEY,
-// STRIPE_PUBLISHABLE_KEY (seule renvoyée), PUBLIC_APP_URL ; jamais journalisés.
+// STRIPE_PUBLISHABLE_KEY (seule renvoyée), PUBLIC_APP_URL (obligatoire pour le
+// web ; l'en-tête Origin n'est jamais utilisé) ; jamais journalisés.
 import { authenticate, corsHeaders, json, serviceClient } from '../_shared/http.ts';
 import { DbError, handleCreatePayment } from '../_shared/payments.ts';
 

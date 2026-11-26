@@ -101,7 +101,7 @@ Edge Functions : `create-payment`, `cancel-subscription`, `process-refunds`, `re
 | `STRIPE_SECRET_KEY` | clé secrète (`sk_test_…` / `sk_live_…`) ; jamais journalisée ni renvoyée |
 | `STRIPE_PUBLISHABLE_KEY` | clé publiable (`pk_…`), renvoyée à l'app native pour la PaymentSheet |
 | `STRIPE_WEBHOOK_SECRET` | secret de signature de l'endpoint webhook (`whsec_…`) |
-| `PUBLIC_APP_URL` | origine de l'app web (ex. `https://app.icon-valais.ch`) pour les retours de Stripe Checkout ; à défaut, l'en-tête `Origin` de la requête |
+| `PUBLIC_APP_URL` | **obligatoire pour le web** : adresse de l'app web (ex. `https://app.icon-valais.ch`) pour les retours de Stripe Checkout ; sans elle, `create-payment` web répond 500 `not_configured` (l'en-tête `Origin` n'est jamais utilisé) |
 
 ```sh
 npx supabase secrets set STRIPE_SECRET_KEY=sk_live_... STRIPE_PUBLISHABLE_KEY=pk_live_... \
@@ -109,9 +109,12 @@ npx supabase secrets set STRIPE_SECRET_KEY=sk_live_... STRIPE_PUBLISHABLE_KEY=pk
 ```
 
 **Version de l'API Stripe : `2024-06-20`**, épinglée par l'en-tête `Stripe-Version` de chaque appel
-(`STRIPE_API_VERSION` dans `_shared/stripe.ts`). Créer l'endpoint webhook avec **la même version**
-(les événements `invoice.*` y contiennent encore `payment_intent`, utile aux remboursements
-d'abonnement).
+(`STRIPE_API_VERSION` dans `_shared/stripe.ts`). L'endpoint webhook peut utiliser n'importe quelle
+version : si un événement `invoice.paid` ne contient pas `payment_intent` (versions récentes), le
+webhook le demande à Stripe (`GET /v1/invoices/<id>`, à défaut `GET /v1/invoice_payments?invoice=<id>`,
+avec la version épinglée) avant d'appeler la base. La base refuse (`missing_intent`, Stripe réessaie)
+de régler une adhésion sans intent connu : chaque paiement reste remboursable. Le webhook a donc
+aussi besoin de `STRIPE_SECRET_KEY`.
 
 **Webhook** (tableau de bord Stripe → Developers → Webhooks → Add endpoint) :
 URL `https://<project-ref>.supabase.co/functions/v1/stripe-webhook` (fonction sans JWT,
@@ -120,8 +123,8 @@ URL `https://<project-ref>.supabase.co/functions/v1/stripe-webhook` (fonction sa
 `customer.subscription.updated`, `customer.subscription.deleted`, `charge.refunded`.
 Activer TWINT (Settings → Payment methods) pour les paiements en CHF.
 
-**Retours Stripe Checkout (web)** : `<origin>/payment-result?status=success|cancel&payment=<payment_id>`,
-où `<origin>` = `PUBLIC_APP_URL`, sinon l'en-tête `Origin` de l'appel à `create-payment`. Le statut
+**Retours Stripe Checkout (web)** : `<PUBLIC_APP_URL>/payment-result?status=success|cancel&payment=<payment_id>`.
+La page Checkout d'un cours affiche « Remboursé uniquement si le cours est annulé par le professeur. ». Le statut
 affiché doit être relu en base (le webhook fait foi), pas déduit du paramètre `status`.
 
 **Metadata** (le webhook en dépend) : PaymentIntent `payment_id` + `booking_id` (cours) ou
@@ -135,11 +138,13 @@ réutilisé ensuite. **Produit** des abonnements : `icon_valais_membership`, cr�
 `0012_payment_followups.sql`, mêmes secrets Vault `functions_url` / `service_role_key` que `send-push`) :
 elle n'appelle la fonction que s'il y a un paiement `refund_pending` ou un abonnement à annuler. Un
 montant reçu différent du montant attendu (ou un second paiement pour la même réservation) est
-remboursé automatiquement ; un abonnement dont la première facture a un mauvais montant est
-annulé immédiatement chez Stripe.
+remboursé automatiquement ; un abonnement dont une facture (première ou renouvellement) a un mauvais
+montant est en plus annulé immédiatement chez Stripe. Chaque ligne est traitée isolément : une erreur
+la laisse pour le passage suivant sans bloquer les autres.
 
 **Quittances** : `GET /functions/v1/receipt?payment=<id>[&lang=fr|de|en|ru]` (jeton de l'utilisateur)
-→ PDF, visible du payeur, du bénéficiaire, de son parent et de l'admin (RLS de `payments`).
+→ PDF, visible du payeur, du bénéficiaire, de son parent et de l'admin (RLS de `payments`) ; jeton
+invalide → 401 ; paiement non réglé ou rendu pour anomalie (montant différent, double paiement) → 409.
 
 ## Lancer l'application
 

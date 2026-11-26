@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(142);
+select plan(143);
 
 create temp table ids (k text primary key, v uuid);
 grant all on ids to authenticated, service_role;
@@ -288,6 +288,10 @@ select is((select row(status, starts_on, ends_on, auto_renew, stripe_subscriptio
 -- activation sans intent dans la facture : retrouvée par p_membership
 select pg_temp.as_service();
 select pg_temp.smp('t2', pg_temp.k('pa'), pg_temp.k('pa'), 3, 'stripe_subscription');
+-- intent de la première facture lié par create-payment (0012 : obligatoire)
+reset role;
+select pg_temp.intent(pg_temp.pmid('t2'), 'pi_t2');
+select pg_temp.as_service();
 select is(public.activate_membership(null, 'sub_t2', pg_temp.today_z() + 91, pg_temp.mid('t2'), 'card'), 'activated',
           'sans intent : retrouvée par p_membership');
 select is(public.activate_membership(null, 'sub_t2', pg_temp.today_z() + 91, pg_temp.mid('t2')), 'already',
@@ -304,8 +308,8 @@ select is(pg_temp.pst(pg_temp.pmid('t2')), 'succeeded', 'sans intent : paiement 
 -- renew_membership
 -- ---------------------------------------------------------------------------
 select pg_temp.as_service();
-select is(public.renew_membership('sub_t', 'in_1', 100, pg_temp.today_z() + 60), 'renewed', 'renouvellement : renewed');
-select is(public.renew_membership('sub_t', 'in_1', 100, pg_temp.today_z() + 60), 'already',
+select is(public.renew_membership('sub_t', 'in_1', 100, pg_temp.today_z() + 60, 'chf', 'pi_in_1'), 'renewed', 'renouvellement : renewed');
+select is(public.renew_membership('sub_t', 'in_1', 100, pg_temp.today_z() + 60, 'chf', 'pi_in_1'), 'already',
           'même facture deux fois : already');
 select throws_ok($$ select public.renew_membership('sub_unknown', 'in_x', 100, current_date + 30) $$, 'P0002', null,
                  'abonnement inconnu : P0002');
@@ -320,22 +324,26 @@ select is((select row(status, amount, stripe_invoice_id, payer_profile_id, benef
 select is(public.is_member(pg_temp.k('t'), pg_temp.today_z() + 60), true, 'adhérent jusqu''à la nouvelle fin');
 -- facture plus ancienne rejouée après une plus récente : ends_on ne recule pas
 select pg_temp.as_service();
-select is(public.renew_membership('sub_t', 'in_0', 100, pg_temp.today_z() + 45), 'renewed', 'facture ancienne : renewed');
+select is(public.renew_membership('sub_t', 'in_0', 100, pg_temp.today_z() + 45, 'chf', 'pi_in_0'), 'renewed', 'facture ancienne : renewed');
 reset role;
 select is((pg_temp.m('t1')).ends_on, pg_temp.today_z() + 60, 'facture ancienne : ends_on ne recule pas');
 select pg_temp.as_service();
-select is(public.renew_membership('sub_t', 'in_bad', 50, pg_temp.today_z() + 90, 'chf'), 'amount_mismatch',
+select is(public.renew_membership('sub_t', 'in_bad', 50, pg_temp.today_z() + 90, 'chf', 'pi_in_bad'), 'amount_mismatch',
           'renouvellement : montant différent → amount_mismatch');
-select is(public.renew_membership('sub_t', 'in_eur', 100, pg_temp.today_z() + 90, 'eur'), 'amount_mismatch',
+select is(public.renew_membership('sub_t', 'in_eur', 100, pg_temp.today_z() + 90, 'eur', 'pi_in_eur'), 'amount_mismatch',
           'renouvellement : devise différente → amount_mismatch');
-select is(public.renew_membership('sub_t', 'in_bad', 50, pg_temp.today_z() + 90, 'chf'), 'already',
+select is(public.renew_membership('sub_t', 'in_bad', 50, pg_temp.today_z() + 90, 'chf', 'pi_in_bad'), 'already',
           'renouvellement refusé rejoué : already');
 select is(public.renew_membership('sub_t', 'in_2', 100, pg_temp.today_z() + 60, 'chf', 'pi_in_2'), 'renewed',
           'renouvellement avec l''intent de la facture');
 reset role;
 select is((pg_temp.m('t1')).ends_on, pg_temp.today_z() + 60, 'montant différent : pas de prolongation');
 select is((select status::text || ' ' || (error is not null)::text from public.payments where stripe_invoice_id = 'in_bad'),
-          'failed true', 'montant différent : paiement failed avec note');
+          'refund_pending true', 'montant différent : paiement refund_pending (0012) avec note');
+select is((select row(stripe_cancel_pending, auto_renew)::text from pg_temp.m('t1')), row(true, false)::text,
+          'renouvellement au mauvais montant : abonnement à annuler (0012)');
+-- la suite (chevauchements) suppose l'abonnement sub_t toujours reconduit
+update public.memberships set stripe_cancel_pending = false, auto_renew = true where id = pg_temp.mid('t1');
 select is((select stripe_payment_intent_id from public.payments where stripe_invoice_id = 'in_2'), 'pi_in_2',
           'intent de la facture gardé sur le paiement');
 select pg_temp.as_service();
@@ -374,6 +382,9 @@ reset role;
 update public.profiles set paid_until = pg_temp.today_z() + 5 where id = pg_temp.k('w');
 select pg_temp.as_service();
 select pg_temp.smp('w1', pg_temp.k('w'), pg_temp.k('w'), 1, 'stripe_subscription');
+reset role;
+select pg_temp.intent(pg_temp.pmid('w1'), 'pi_w1');
+select pg_temp.as_service();
 select is(public.activate_membership(null, 'sub_w', pg_temp.today_z() + 31, pg_temp.mid('w1'), 'card', 10000, 'chf'),
           'activated', 'dans les 7 derniers jours : abonnement accepté');
 reset role;

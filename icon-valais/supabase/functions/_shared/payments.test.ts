@@ -82,6 +82,7 @@ Deno.test('buildCheckoutParams: paiement (carte + TWINT) et abonnement, URLs de 
   assertEquals(c['metadata[payment_id]'], PAY);
   assertEquals(c.client_reference_id, PAY);
   assertEquals(c.customer, 'cus_1');
+  assertEquals(c['custom_text[submit][message]'], 'Remboursé uniquement si le cours est annulé par le professeur.');
 
   const s = buildCheckoutParams(
     { payment_id: PAY, amount: 100, description: 'Adhésion 1 mois (abonnement)', membership_id: MEM, months: 1, subscription: true, customer_id: 'cus_1' },
@@ -97,15 +98,16 @@ Deno.test('buildCheckoutParams: paiement (carte + TWINT) et abonnement, URLs de 
   assertEquals(s['subscription_data[metadata][membership_id]'], MEM);
   assertEquals(s['subscription_data[metadata][payment_id]'], PAY);
   assertEquals(s['payment_intent_data[metadata][payment_id]'], undefined);
+  assertEquals(s['custom_text[submit][message]'], undefined);
 });
 
-Deno.test('resolveAppOrigin: PUBLIC_APP_URL, sinon en-tête Origin ; http(s) seulement', () => {
-  assertEquals(resolveAppOrigin('https://app.icon-valais.ch/', 'https://evil.example'), 'https://app.icon-valais.ch');
-  assertEquals(resolveAppOrigin(undefined, 'http://localhost:8081'), 'http://localhost:8081');
-  assertEquals(resolveAppOrigin('', 'https://web.example/path'), 'https://web.example');
-  assertEquals(resolveAppOrigin(undefined, null), null);
-  assertEquals(resolveAppOrigin(undefined, 'javascript:alert(1)'), null);
-  assertEquals(resolveAppOrigin('not a url', null), null);
+Deno.test('resolveAppOrigin: PUBLIC_APP_URL seulement (jamais l\'en-tête Origin), http(s)', () => {
+  assertEquals(resolveAppOrigin('https://app.icon-valais.ch/'), 'https://app.icon-valais.ch');
+  assertEquals(resolveAppOrigin('https://example.ch/app/'), 'https://example.ch/app');
+  assertEquals(resolveAppOrigin(undefined), null);
+  assertEquals(resolveAppOrigin(''), null);
+  assertEquals(resolveAppOrigin('javascript:alert(1)'), null);
+  assertEquals(resolveAppOrigin('not a url'), null);
 });
 
 // ---------------------------------------------------------------------------
@@ -415,27 +417,35 @@ Deno.test('create-payment: adhésion carte native → produit, abonnement defaul
   assertEquals(log.attach, [[PAY, 'pi_inv']]);
 });
 
-Deno.test('create-payment: web → URL Stripe Checkout, retours <origin>/payment-result', async () => {
+Deno.test('create-payment: web → URL Stripe Checkout, retours <PUBLIC_APP_URL>/payment-result', async () => {
   const { fetchFn, calls } = fakeStripe({ ...PI_ROUTES, 'POST checkout/sessions': { body: { id: 'cs_1', url: 'https://checkout.stripe.com/c/pay/cs_1' } } });
-  const res = await handleCreatePayment(req({ kind: 'course', bookingId: BOOK, platform: 'web' }), createDeps({ publicAppUrl: undefined }, fetchFn, newLog()));
-  // ni PUBLIC_APP_URL ni Origin → 400
-  assertEquals(res.status, 400);
-  const ok = await handleCreatePayment(req({ kind: 'course', bookingId: BOOK, platform: 'web' }, { Origin: 'http://localhost:8081' }), createDeps({ publicAppUrl: undefined }, fetchFn, newLog()));
+  // sans PUBLIC_APP_URL → 500 not_configured, même avec un en-tête Origin ; aucun appel
+  const res = await handleCreatePayment(
+    req({ kind: 'course', bookingId: BOOK, platform: 'web' }, { Origin: 'http://localhost:8081' }),
+    createDeps({ publicAppUrl: undefined }, fetchFn, newLog()),
+  );
+  assertEquals(res.status, 500);
+  assertEquals(res.body, { error: 'not_configured' });
+  assertEquals(calls.length, 0);
+  const ok = await handleCreatePayment(
+    req({ kind: 'course', bookingId: BOOK, platform: 'web' }, { Origin: 'https://evil.example' }),
+    createDeps({}, fetchFn, newLog()),
+  );
   assertEquals(ok.status, 200);
   assertEquals(ok.body, { checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_1' });
   const cs = calls.find((c) => c.path === 'checkout/sessions')!;
-  assertEquals(cs.params.get('success_url'), `http://localhost:8081/payment-result?status=success&payment=${PAY}`);
-  assertEquals(cs.params.get('cancel_url'), `http://localhost:8081/payment-result?status=cancel&payment=${PAY}`);
+  assertEquals(cs.params.get('success_url'), `https://app.icon-valais.ch/payment-result?status=success&payment=${PAY}`);
+  assertEquals(cs.params.get('cancel_url'), `https://app.icon-valais.ch/payment-result?status=cancel&payment=${PAY}`);
   assertEquals(cs.params.get('line_items[0][price_data][unit_amount]'), '2000');
   assertEquals(cs.params.get('payment_intent_data[metadata][booking_id]'), BOOK);
   assertEquals(cs.idem, `checkout-${PAY}`);
   assertEquals(calls.filter((c) => c.path === 'payment_intents').length, 0);
 });
 
-Deno.test('create-payment: web abonnement → Checkout mode subscription (PUBLIC_APP_URL prioritaire)', async () => {
+Deno.test('create-payment: web abonnement → Checkout mode subscription', async () => {
   const { fetchFn, calls } = fakeStripe({ ...PI_ROUTES, 'POST checkout/sessions': { body: { id: 'cs_2', url: 'https://checkout.stripe.com/c/pay/cs_2' } } });
   const res = await handleCreatePayment(
-    req({ kind: 'membership', profileId: KID, months: 1, method: 'card', platform: 'web' }, { Origin: 'https://evil.example' }),
+    req({ kind: 'membership', profileId: KID, months: 1, method: 'card', platform: 'web' }),
     createDeps({}, fetchFn, newLog()),
   );
   assertEquals(res.status, 200);
@@ -595,4 +605,44 @@ Deno.test('process-refunds: abonnement au mauvais montant annulé immédiatement
   assertEquals(calls[0].method, 'DELETE');
   assertEquals(calls[0].idem, 'cancel-now-m1');
   assertEquals(calls[calls.length - 1].path, 'refunds');
+});
+
+Deno.test('create-payment: abonnement — attach renvoie un autre intent → abonnement annulé, 409', async () => {
+  const { fetchFn, calls } = fakeStripe({
+    ...PI_ROUTES,
+    'POST products': { body: { id: MEMBERSHIP_PRODUCT_ID } },
+    'POST subscriptions': { body: { id: 'sub_1', latest_invoice: { id: 'in_1', payment_intent: { id: 'pi_inv', client_secret: 's' } } } },
+    'DELETE subscriptions/sub_1': { body: { id: 'sub_1', status: 'canceled' } },
+  });
+  const res = await handleCreatePayment(
+    req({ kind: 'membership', profileId: KID, months: 1, method: 'card', platform: 'native' }),
+    createDeps({ attachIntent: () => Promise.resolve('pi_other') }, fetchFn, newLog()),
+  );
+  assertEquals(res.status, 409);
+  assertEquals(res.body, { error: 'payment_conflict' });
+  const del = calls.find((c) => c.method === 'DELETE')!;
+  assertEquals(del.path, 'subscriptions/sub_1');
+  assertEquals(del.idem, `cancel-now-sub-${PAY}`);
+  assertEquals(calls.filter((c) => c.path === 'ephemeral_keys').length, 0);
+});
+
+Deno.test('process-refunds: une ligne en erreur (base ou réseau) n\'interrompt pas le lot', async () => {
+  const { fetchFn } = fakeStripe({
+    'POST refunds': { body: { id: 're_1' } },
+    'DELETE subscriptions/sub_a': { body: { id: 'sub_a' } },
+    'DELETE subscriptions/sub_b': { body: { id: 'sub_b' } },
+  });
+  const log: RefundLog = { refunded: [], cancelled: [] };
+  const res = await handleProcessRefunds(
+    svcReq(),
+    refundDeps({
+      subscriptionsToCancel: () => Promise.resolve([{ membership_id: 'ma', stripe_subscription_id: 'sub_a' }, { membership_id: 'mb', stripe_subscription_id: 'sub_b' }]),
+      markSubscriptionCancelled: (id) => (id === 'ma' ? Promise.reject(new Error('db down')) : (log.cancelled.push(id), Promise.resolve())),
+      markRefunded: (id) => (id === 'p1' ? Promise.reject(new Error('db down')) : (log.refunded.push(id), Promise.resolve())),
+    }, fetchFn, log),
+  );
+  assertEquals(res.status, 200);
+  assertEquals(res.body, { refunded: 1, cancelled: 1, failed: 2 });
+  assertEquals(log.refunded, ['p2']);
+  assertEquals(log.cancelled, ['mb']);
 });

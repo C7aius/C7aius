@@ -4,7 +4,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(41);
+select plan(52);
 
 create temp table ids (k text primary key, v uuid);
 grant all on ids to authenticated, service_role;
@@ -28,6 +28,18 @@ create function pg_temp.as_service() returns void
 language sql as $$
   select set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
   set local role service_role;
+$$;
+
+create function pg_temp.hint_of(p_sql text) returns text
+language plpgsql as $$
+declare v_hint text;
+begin
+  execute p_sql;
+  return null;
+exception when others then
+  get stacked diagnostics v_hint = pg_exception_hint;
+  return v_hint;
+end;
 $$;
 
 create function pg_temp.pid(p_auth uuid) returns uuid
@@ -206,6 +218,40 @@ select is((select count(*)::int from public.subscriptions_to_cancel(20)), 0, 'an
 reset role;
 select is((pg_temp.m(pg_temp.mid('s1'))).status::text || ' ' || (pg_temp.m(pg_temp.mid('s1'))).stripe_cancel_pending,
           'ended false', 'annulé : adhésion terminée');
+
+-- ---------------------------------------------------------------------------
+-- Intent obligatoire pour régler une adhésion ; renouvellement au mauvais montant
+-- ---------------------------------------------------------------------------
+select pg_temp.as_service();
+select pg_temp.smp('s2', pg_temp.k('u'), 1, 'stripe_subscription');
+select is(pg_temp.hint_of(format('select public.activate_membership(null, %L, %L, %L, %L, 10000, %L)',
+                                 'sub_ok', (now() at time zone 'Europe/Zurich')::date + 30, pg_temp.mid('s2'), 'card', 'chf')),
+          'missing_intent', 'première facture sans intent connu → missing_intent (Stripe réessaiera)');
+reset role;
+select is((pg_temp.p(pg_temp.pmid('s2'))).status, 'pending'::public.payment_state, 'missing_intent : rien enregistré');
+select pg_temp.as_service();
+select is(public.activate_membership('pi_s2_inv', 'sub_ok', (now() at time zone 'Europe/Zurich')::date + 30,
+                                     pg_temp.mid('s2'), 'card', 10000, 'chf'),
+          'activated', 'intent résolu (webhook) : activated');
+select is(pg_temp.hint_of($$ select public.renew_membership('sub_ok', 'in_r1', 100, current_date + 60, 'chf') $$),
+          'missing_intent', 'renouvellement sans intent → missing_intent');
+select is((select count(*)::int from public.payments where stripe_invoice_id = 'in_r1'), 0, 'missing_intent : aucun paiement');
+select is(public.renew_membership('sub_ok', 'in_r2', 80, current_date + 60, 'chf', 'pi_r2'), 'amount_mismatch',
+          'renouvellement au mauvais montant → amount_mismatch');
+reset role;
+select is((select status::text || ' ' || (paid_at is not null) || ' ' || stripe_payment_intent_id || ' ' || (error is not null)
+             from public.payments where stripe_invoice_id = 'in_r2'),
+          'refund_pending true pi_r2 true', 'renouvellement au mauvais montant : refund_pending, payé, intent, note');
+select is((pg_temp.m(pg_temp.mid('s2'))).stripe_cancel_pending::text || ' ' || (pg_temp.m(pg_temp.mid('s2'))).auto_renew,
+          'true false', 'renouvellement au mauvais montant : abonnement à annuler immédiatement');
+select pg_temp.as_service();
+select is(public.renew_membership('sub_ok', 'in_r2', 80, current_date + 60, 'chf', 'pi_r2'), 'already',
+          'facture rejouée → already (idempotent)');
+select ok('sub_ok' in (select stripe_subscription_id from public.subscriptions_to_cancel(20)), 'listé dans subscriptions_to_cancel');
+select ok(pg_temp.pmid('s2') is not null
+          and (select id from public.payments where stripe_invoice_id = 'in_r2') in (select id from public.refunds_to_process(50)),
+          'listé dans refunds_to_process');
+reset role;
 
 -- ---------------------------------------------------------------------------
 -- Planification et droits

@@ -5,6 +5,7 @@
 // Ne journalise jamais le secret, la signature ni le corps de l'événement
 // (données personnelles) : seulement le type, l'id de l'événement et l'action.
 import { CLUB_TIME_ZONE } from './push.ts';
+import { stripeRequest } from './stripe.ts';
 
 export type StripeEvent = {
   id: string;
@@ -266,7 +267,32 @@ export type StripeWebhookDeps = {
   // la même transaction ; 'duplicate' si déjà reçu ; rejette en cas d'erreur
   // (rien n'est alors enregistré : Stripe renverra l'événement)
   apply(id: string, type: string, fn: string, args: Record<string, unknown>): Promise<string>;
+  // intent d'une facture absent de l'événement (format récent de l'API) :
+  // demandé à Stripe (fetchInvoicePaymentIntent) ; rejette si Stripe échoue
+  resolveInvoiceIntent?(invoiceId: string): Promise<string | null>;
 };
+
+// PaymentIntent d'une facture : GET /v1/invoices/<id> (version épinglée :
+// champ payment_intent), sinon GET /v1/invoice_payments?invoice=<id> (API
+// récente). null si introuvable. Erreur de /v1/invoices → rejet (réessai).
+export async function fetchInvoicePaymentIntent(invoiceId: string, key: string, fetchFn: typeof fetch = fetch): Promise<string | null> {
+  const inv = obj(await stripeRequest(`invoices/${encodeURIComponent(invoiceId)}`, {}, key, fetchFn, undefined, 'GET'));
+  const direct = inv ? invoicePaymentIntent(inv) : null;
+  if (direct) return direct;
+  try {
+    const list = obj(await stripeRequest('invoice_payments', { invoice: invoiceId }, key, fetchFn, undefined, 'GET'));
+    const data = list?.data;
+    if (Array.isArray(data)) {
+      for (const p of data) {
+        const id = idOf(obj(obj(p)?.payment)?.payment_intent);
+        if (id) return id;
+      }
+    }
+  } catch {
+    // endpoint absent avec la version épinglée : rien de plus à essayer
+  }
+  return null;
+}
 
 export type StripeWebhookResult = { status: number; body: Record<string, unknown> };
 
@@ -299,6 +325,21 @@ export async function handleStripeWebhook(req: Request, deps: StripeWebhookDeps)
 
   const action = routeStripeEvent(event);
   if ('ignore' in action) return { status: 200, body: { received: true, ignored: true } };
+
+  // facture sans intent : résolu auprès de Stripe (sinon la base refuse de
+  // régler un paiement qu'on ne pourrait pas rembourser)
+  if (event.type === 'invoice.paid' && deps.resolveInvoiceIntent) {
+    const key = action.fn === 'activate_membership' ? 'p_payment_intent' : action.fn === 'renew_membership' ? 'p_intent' : null;
+    const invoiceId = str(obj(event.data?.object)?.id);
+    if (key && action.args[key] == null && invoiceId) {
+      try {
+        action.args[key] = await deps.resolveInvoiceIntent(invoiceId);
+      } catch (e) {
+        console.error('stripe-webhook: invoice intent lookup failed', event.type, event.id, errMessage(e));
+        return { status: 500, body: { error: 'processing failed' } };
+      }
+    }
+  }
 
   let result: string;
   try {
