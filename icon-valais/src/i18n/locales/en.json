@@ -212,6 +212,17 @@
     "competitionSoon": "Coming soon",
     "emptyHere": "Nothing to show yet."
   },
+  "ranking": {
+    "top10": "Top 10",
+    "top20": "Top 20",
+    "all": "All",
+    "allTime": "All time",
+    "thisYear": "This year",
+    "myPosition": "Your position: #{{rank}} ({{count}} sessions)",
+    "noAttendance": "No attendance yet",
+    "empty": "No attendance recorded yet.",
+    "sessions": "{{count}} sessions"
+  },
   "errors": {
     "generic": "Something went wrong",
     "network": "Connection problem, please try again",

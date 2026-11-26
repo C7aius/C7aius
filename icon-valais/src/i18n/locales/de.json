@@ -212,6 +212,17 @@
     "competitionSoon": "Demnächst verfügbar",
     "emptyHere": "Im Moment gibt es nichts anzuzeigen."
   },
+  "ranking": {
+    "top10": "Top 10",
+    "top20": "Top 20",
+    "all": "Alle",
+    "allTime": "Gesamt",
+    "thisYear": "Dieses Jahr",
+    "myPosition": "Deine Position: Nr. {{rank}} ({{count}} Anwesenheiten)",
+    "noAttendance": "Noch keine Anwesenheit",
+    "empty": "Noch keine Anwesenheiten erfasst.",
+    "sessions": "{{count}} Anwesenheiten"
+  },
   "errors": {
     "generic": "Ein Fehler ist aufgetreten",
     "network": "Verbindungsproblem, bitte erneut versuchen",
