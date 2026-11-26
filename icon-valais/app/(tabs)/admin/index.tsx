@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth, type Profile } from '@/src/auth/AuthProvider';
@@ -39,11 +39,15 @@ export default function Admin() {
   const { profile, ready } = useAuth();
   const router = useRouter();
   const { width } = useWindowDimensions();
+  const { filter: filterParam } = useLocalSearchParams<{ filter?: string }>();
   const wide = width >= WIDE;
   const [rows, setRows] = useState<Profile[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<Filter>(filterParam === 'pending' ? 'pending' : 'all');
+  useEffect(() => {
+    if (filterParam === 'pending') setFilter('pending');
+  }, [filterParam]);
   const [membership, setMembership] = useState<Membership | null>(null);
   const [segment, setSegment] = useState<Segment | null>(null);
   const [stats, setStats] = useState<Record<string, MemberSegmentRow>>({});

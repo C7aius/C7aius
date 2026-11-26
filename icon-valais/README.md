@@ -294,10 +294,14 @@ commencé** (`starts_at <= now()`). Les heures sont la durée du cours (`ends_at
   propre position (celle qu'ils auraient s'ils étaient inclus), sans figurer dans la liste.
 - **Tableau de bord admin** (`/admin/dashboard`) : heures d'enseignement par prof (cours avec un prof, un open mat
   sans prof ne compte pour personne) et total ; présences et heures par membre ; périodes Ce mois, Cette année
-  ou dates personnalisées (bornes incluses) ; compteurs de profs et justificatifs en attente.
+  ou dates personnalisées (bornes incluses) ; compteurs de profs et justificatifs en attente (celui des profs
+  ouvre la liste des comptes filtrée sur « profs en attente »). « Heures de présence » couvre tous les
+  membres venus (adhérents ou non, profs venus comme élèves). Supprimer le compte d'un prof retire ses heures
+  d'enseignement passées des statistiques (ses cours n'ont plus de prof).
 - **Segments** (liste des membres, filtres Jamais / Essai / Occasionnel / Régulier, RPC `admin_member_segments`) :
   `jamais` = aucune présence ; `essai` = une seule présence au total ; `régulier` = 12 présences ou plus sur les
-  90 derniers jours ; sinon `occasionnel`. La liste affiche aussi le nombre de venues et la dernière venue.
+  90 derniers jours ; sinon `occasionnel` (au moins 2 présences au total et moins de 12 sur les 90 derniers
+  jours, y compris sans venue récente). La liste affiche aussi le nombre de venues et la dernière venue.
 - Les RPC `admin_*` sont réservées à un admin au compte actif ; le classement à tout compte actif.
 
 ## Notes pour les plans suivants

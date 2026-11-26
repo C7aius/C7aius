@@ -52,17 +52,25 @@ function Dashboard() {
   const loadCounts = useCallback(async () => {
     try {
       const [p, s] = await Promise.all([
-        supabase.from('profiles').select('id').eq('role', 'prof').eq('prof_status', 'en_attente'),
-        supabase.from('pending_student_proofs').select('id'),
+        supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'prof').eq('prof_status', 'en_attente'),
+        supabase.from('pending_student_proofs').select('id', { count: 'exact', head: true }),
       ]);
-      setCounts({ profs: p.data?.length ?? 0, proofs: s.data?.length ?? 0 });
+      if (p.error || s.error || p.count == null || s.count == null) setCounts(null);
+      else setCounts({ profs: p.count, proofs: s.count });
     } catch {
       setCounts(null);
     }
   }, []);
 
+  const kindRef = useRef(kind);
+  kindRef.current = kind;
+
   useFocusEffect(
     useCallback(() => {
+      if (kindRef.current !== 'custom') {
+        const fresh = periodRange(kindRef.current, zurichToday());
+        setRange((r) => (r.from === fresh.from && r.to === fresh.to ? r : fresh));
+      }
       void load();
       void loadCounts();
     }, [load, loadCounts]),
@@ -93,7 +101,7 @@ function Dashboard() {
 
       {counts ? (
         <View style={styles.counters}>
-          <Pressable accessibilityRole="link" style={styles.counter} onPress={() => router.push('/admin')}>
+          <Pressable accessibilityRole="link" style={styles.counter} onPress={() => router.push('/admin?filter=pending')}>
             <Text style={styles.counterText}>{t('admin.dashPendingProfs', { count: counts.profs })}</Text>
           </Pressable>
           <Pressable accessibilityRole="link" style={styles.counter} onPress={() => router.push('/admin/students')}>

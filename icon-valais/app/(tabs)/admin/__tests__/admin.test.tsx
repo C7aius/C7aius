@@ -13,7 +13,7 @@ let mockRole = 'admin';
 let mockReady = true;
 let mockFocusCb: (() => void) | null = null;
 let mockSelectError: { code?: string } | null = null;
-let mockParams: { id?: string } = {};
+let mockParams: { id?: string; filter?: string } = {};
 let mockRows: Record<string, unknown>[] = [];
 const mockSideQuery = () => {
   const q: Record<string, unknown> = {};
@@ -84,6 +84,14 @@ beforeEach(async () => {
 const press = async (label: string) => fireEvent.press(screen.getByText(label));
 
 describe('account list', () => {
+  it('preselects the pending-profs filter from the ?filter=pending param', async () => {
+    mockParams = { filter: 'pending' };
+    await render(<AdminList />);
+    await waitFor(() => expect(screen.getByText('Alice Test')).toBeTruthy());
+    expect(screen.queryByText('Bruno Test')).toBeNull();
+    expect(screen.queryByText('Chloe Test')).toBeNull();
+  });
+
   it('links to the locations screen', async () => {
     await render(<AdminList />);
     await waitFor(() => expect(screen.getByText('Chloe Test')).toBeTruthy());
