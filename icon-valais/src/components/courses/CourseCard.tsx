@@ -7,7 +7,7 @@ import { courseLabelStatus, formatChf, formatCourseTime, type CourseRow } from '
 import type { Lang } from '@/src/i18n';
 import { ErrorText } from '@/src/components/ui';
 import { colors } from '@/src/theme';
-import { BookButton } from './BookButton';
+import { BookButton, type PayInfo } from './BookButton';
 import { LocationDetails } from './LocationDetails';
 
 export function CourseCard({
@@ -16,6 +16,7 @@ export function CourseCard({
   lang,
   selfId,
   kids,
+  payInfo,
   onOpen,
   onChanged,
 }: {
@@ -24,6 +25,7 @@ export function CourseCard({
   lang: Lang;
   selfId: string;
   kids: Pick<Profile, 'id' | 'first_name'>[];
+  payInfo?: Record<string, PayInfo>;
   onOpen: () => void;
   onChanged: () => void;
 }) {
@@ -68,6 +70,7 @@ export function CourseCard({
           course={course}
           selfId={selfId}
           kids={kids}
+          payInfo={payInfo}
           onError={setErrorKey}
           onDone={onChanged}
         />

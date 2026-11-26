@@ -325,5 +325,28 @@
         "profYearOnly": "Coaches can only repeat a class until 31 December of the current year."
       }
     }
+  },
+  "payments": {
+    "trial": "Trial classes — {{used}}/{{limit}} used",
+    "confirmTitle": "Confirm booking",
+    "refundNotice": "Refunded only if the class is cancelled by the instructor.",
+    "becomeMember": "Become a member",
+    "pay": "Pay",
+    "cancel": "Cancel",
+    "busy": "Payment in progress…",
+    "pendingConfirmation": "Payment awaiting confirmation…",
+    "confirmed": "Payment confirmed.",
+    "holdNotice": "Your spot is held for 15 minutes.",
+    "error": "The payment failed, please try again.",
+    "conflict": "A payment is already in progress for this booking.",
+    "alreadyCovered": "This booking does not need a payment.",
+    "notConfigured": "Payment is not available yet.",
+    "providerError": "The payment service is unavailable, please try again.",
+    "resultTitleSuccess": "Payment received",
+    "resultSuccess": "Thank you! Your payment is awaiting confirmation.",
+    "resultTitleCancel": "Payment cancelled",
+    "resultCancel": "Nothing was charged. Your spot is released after 15 minutes.",
+    "resultInvalid": "Unknown payment return.",
+    "backHome": "Back to classes"
   }
 }

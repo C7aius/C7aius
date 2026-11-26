@@ -28,6 +28,13 @@
       "expo-router",
       "expo-notifications",
       [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.ch.iconvalais.placeholder",
+          "enableGooglePay": true
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",

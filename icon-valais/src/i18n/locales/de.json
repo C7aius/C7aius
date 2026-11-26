@@ -325,5 +325,28 @@
         "profYearOnly": "Trainer können einen Kurs nur bis zum 31. Dezember des laufenden Jahres wiederholen."
       }
     }
+  },
+  "payments": {
+    "trial": "Probetraining — {{used}}/{{limit}} genutzt",
+    "confirmTitle": "Buchung bestätigen",
+    "refundNotice": "Rückerstattung nur, wenn der Kurs vom Trainer abgesagt wird.",
+    "becomeMember": "Mitglied werden",
+    "pay": "Bezahlen",
+    "cancel": "Abbrechen",
+    "busy": "Zahlung läuft…",
+    "pendingConfirmation": "Zahlung wird bestätigt…",
+    "confirmed": "Zahlung bestätigt.",
+    "holdNotice": "Ihr Platz ist 15 Minuten reserviert.",
+    "error": "Die Zahlung ist fehlgeschlagen, bitte erneut versuchen.",
+    "conflict": "Für diese Buchung läuft bereits eine Zahlung.",
+    "alreadyCovered": "Diese Buchung muss nicht bezahlt werden.",
+    "notConfigured": "Die Zahlung ist noch nicht verfügbar.",
+    "providerError": "Der Zahlungsdienst ist nicht erreichbar, bitte erneut versuchen.",
+    "resultTitleSuccess": "Zahlung erhalten",
+    "resultSuccess": "Danke! Ihre Zahlung wird bestätigt.",
+    "resultTitleCancel": "Zahlung abgebrochen",
+    "resultCancel": "Es wurde nichts abgebucht. Ihr Platz wird nach 15 Minuten freigegeben.",
+    "resultInvalid": "Unbekannte Zahlungsrückkehr.",
+    "backHome": "Zurück zu den Kursen"
   }
 }

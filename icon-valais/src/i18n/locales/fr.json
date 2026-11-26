@@ -325,5 +325,28 @@
         "profYearOnly": "Les profs ne peuvent répéter un cours que jusqu'au 31 décembre de l'année en cours."
       }
     }
+  },
+  "payments": {
+    "trial": "Cours d'essai — {{used}}/{{limit}} utilisés",
+    "confirmTitle": "Confirmer la réservation",
+    "refundNotice": "Remboursé uniquement si le cours est annulé par le professeur.",
+    "becomeMember": "Devenir adhérent",
+    "pay": "Payer",
+    "cancel": "Annuler",
+    "busy": "Paiement en cours…",
+    "pendingConfirmation": "Paiement en cours de confirmation…",
+    "confirmed": "Paiement confirmé.",
+    "holdNotice": "Votre place est réservée 15 minutes.",
+    "error": "Le paiement a échoué, réessayez.",
+    "conflict": "Un paiement est déjà en cours pour cette réservation.",
+    "alreadyCovered": "Cette réservation n'a pas besoin de paiement.",
+    "notConfigured": "Le paiement n'est pas encore disponible.",
+    "providerError": "Le service de paiement est indisponible, réessayez.",
+    "resultTitleSuccess": "Paiement reçu",
+    "resultSuccess": "Merci ! Votre paiement est en cours de confirmation.",
+    "resultTitleCancel": "Paiement annulé",
+    "resultCancel": "Aucun montant n'a été débité. Votre place est libérée après 15 minutes.",
+    "resultInvalid": "Retour de paiement inconnu.",
+    "backHome": "Retour aux cours"
   }
 }

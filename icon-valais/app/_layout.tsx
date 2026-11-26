@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { AuthGate } from '@/src/auth/AuthGate';
 import { AuthProvider } from '@/src/auth/AuthProvider';
+import { PaymentsProvider } from '@/src/components/payments/PaymentsProvider';
 import { initI18n } from '@/src/i18n';
 import { listenForNotificationTaps } from '@/src/lib/push';
 
@@ -27,9 +28,11 @@ export default function RootLayout() {
   if (!ready) return null;
 
   return (
-    <AuthProvider>
-      <StatusBar style="light" />
-      <AuthGate />
-    </AuthProvider>
+    <PaymentsProvider>
+      <AuthProvider>
+        <StatusBar style="light" />
+        <AuthGate />
+      </AuthProvider>
+    </PaymentsProvider>
   );
 }
