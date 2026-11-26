@@ -25,7 +25,13 @@ export default function TabsLayout() {
       <Tabs.Screen name="ranking/index" options={{ title: t('tabs.ranking') }} />
       <Tabs.Screen name="competition/index" options={{ title: t('tabs.competition') }} />
       <Tabs.Screen name="profile" options={{ title: t('tabs.profile') }} />
-      <Tabs.Screen name="admin" options={{ title: t('tabs.admin'), href: isAdmin ? undefined : null }} />
+      {/* Onglet masqué pour un non-admin par le style, pas par `href: null` : à l'ouverture directe d'une URL
+          /admin/..., le profil n'est pas encore chargé, la route serait « masquée » et expo-router
+          redirigerait vers « / ». Les écrans restent protégés par AdminGuard. */}
+      <Tabs.Screen
+        name="admin"
+        options={{ title: t('tabs.admin'), ...(isAdmin ? {} : { tabBarItemStyle: { display: 'none' as const } }) }}
+      />
     </Tabs>
   );
 }

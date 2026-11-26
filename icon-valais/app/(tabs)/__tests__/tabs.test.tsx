@@ -12,8 +12,12 @@ jest.mock('@/src/auth/AuthProvider', () => ({
 jest.mock('expo-router', () => {
   const { Text } = require('react-native');
   const Tabs = ({ children }: { children: unknown }) => <>{children}</>;
-  Tabs.Screen = ({ name, options }: { name: string; options?: { title?: string; href?: null } }) =>
-    options?.href === null ? null : <Text testID={`tab-${name}`}>{options?.title}</Text>;
+  Tabs.Screen = ({ name, options }: { name: string; options?: { title?: string; href?: null; tabBarItemStyle?: { display?: string } } }) =>
+    options?.href === null ? null : (
+      <Text testID={`tab-${name}`} accessibilityState={{ disabled: options?.tabBarItemStyle?.display === 'none' }}>
+        {options?.title}
+      </Text>
+    );
   const Stack = () => <Text testID="admin-stack">stack</Text>;
   return { Tabs, Stack };
 });
@@ -32,13 +36,21 @@ describe('tabs layout', () => {
     mockProfile = { role };
     await render(<TabsLayout />);
     expect(screen.getByTestId('tab-profile')).toBeTruthy();
-    expect(screen.queryByTestId('tab-admin')).toBeNull();
+    expect(screen.getByTestId('tab-admin').props.accessibilityState.disabled).toBe(true); // masqué par le style
+  });
+
+  // Régression : `href: null` sur l'onglet Admin faisait rediriger l'ouverture directe de /admin/students
+  // (profil pas encore chargé) vers « / » (vérifié dans le navigateur, e2e du plan 3).
+  it('never hides the Admin route with href:null, even before the profile is loaded', async () => {
+    mockProfile = null;
+    await render(<TabsLayout />);
+    expect(screen.getByTestId('tab-admin')).toBeTruthy();
   });
 
   it('shows the Admin tab for the admin', async () => {
     mockProfile = { role: 'admin' };
     await render(<TabsLayout />);
-    expect(screen.getByTestId('tab-admin')).toBeTruthy();
+    expect(screen.getByTestId('tab-admin').props.accessibilityState.disabled).toBe(false);
   });
 
   it('retitles the Profile tab when the language changes to ru', async () => {
