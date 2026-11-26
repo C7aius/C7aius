@@ -496,6 +496,55 @@ export type Database = {
           },
         ];
       };
+      orphan_stripe_items: {
+        Row: {
+          amount: number | null;
+          attempts: number;
+          cancelled_at: string | null;
+          created_at: string;
+          error: string | null;
+          failed_at: string | null;
+          id: string;
+          intent: string | null;
+          invoice: string | null;
+          kind: string;
+          next_attempt_at: string | null;
+          refunded_at: string | null;
+          stripe_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          amount?: number | null;
+          attempts?: number;
+          cancelled_at?: string | null;
+          created_at?: string;
+          error?: string | null;
+          failed_at?: string | null;
+          id?: string;
+          intent?: string | null;
+          invoice?: string | null;
+          kind: string;
+          next_attempt_at?: string | null;
+          refunded_at?: string | null;
+          stripe_id: string;
+        };
+        Update: {
+          amount?: number | null;
+          attempts?: number;
+          cancelled_at?: string | null;
+          created_at?: string;
+          error?: string | null;
+          failed_at?: string | null;
+          id?: string;
+          intent?: string | null;
+          invoice?: string | null;
+          kind?: string;
+          next_attempt_at?: string | null;
+          refunded_at?: string | null;
+          stripe_id?: string;
+        };
+        Relationships: [];
+      };
       parent_consents: {
         Row: {
           confirmed_at: string | null;
@@ -552,6 +601,8 @@ export type Database = {
           paid_at: string | null;
           payer_profile_id: string | null;
           receipt_no: number;
+          refund_attempts: number;
+          refund_next_attempt_at: string | null;
           refunded_at: string | null;
           status: Database["public"]["Enums"]["payment_state"];
           stripe_invoice_id: string | null;
@@ -573,6 +624,8 @@ export type Database = {
           paid_at?: string | null;
           payer_profile_id?: string | null;
           receipt_no?: never;
+          refund_attempts?: number;
+          refund_next_attempt_at?: string | null;
           refunded_at?: string | null;
           status?: Database["public"]["Enums"]["payment_state"];
           stripe_invoice_id?: string | null;
@@ -593,6 +646,8 @@ export type Database = {
           paid_at?: string | null;
           payer_profile_id?: string | null;
           receipt_no?: never;
+          refund_attempts?: number;
+          refund_next_attempt_at?: string | null;
           refunded_at?: string | null;
           status?: Database["public"]["Enums"]["payment_state"];
           stripe_invoice_id?: string | null;
@@ -1059,6 +1114,8 @@ export type Database = {
       current_profile_id: { Args: Record<PropertyKey, never>; Returns: string };
       end_membership: { Args: { p_subscription: string }; Returns: undefined };
       fail_payment: { Args: { p_intent: string }; Returns: undefined };
+      fail_unrefundable_payments: { Args: Record<PropertyKey, never>; Returns: number };
+      has_live_subscription: { Args: { p_profile: string }; Returns: boolean };
       invoke_process_refunds: { Args: Record<PropertyKey, never>; Returns: number };
       invoke_send_push: { Args: Record<PropertyKey, never>; Returns: number };
       is_account_active: {
@@ -1076,6 +1133,8 @@ export type Database = {
       is_member: { Args: { p_on?: string; p_profile: string }; Returns: boolean };
       is_self_or_child: { Args: { p_profile: string }; Returns: boolean };
       leave_slot: { Args: { p_course: string }; Returns: undefined };
+      mark_orphan_done: { Args: { p_id: string; p_what: string }; Returns: undefined };
+      mark_refund_failed: { Args: { p_intent: string; p_payment?: string; p_reason?: string }; Returns: string };
       mark_refunded: { Args: { p_payment: string }; Returns: undefined };
       mark_refunded_by_intent: { Args: { p_intent: string; p_invoice?: string }; Returns: string };
       mark_subscription_cancelled: { Args: { p_membership: string }; Returns: undefined };
@@ -1106,9 +1165,40 @@ export type Database = {
         }[];
       };
       notify_profile: { Args: { p_course: string; p_kind: string; p_profile: string }; Returns: undefined };
+      orphan_attempt_failed: { Args: { p_error?: string; p_id: string }; Returns: string };
+      orphans_to_process: {
+        Args: { p_limit: number };
+        Returns: {
+          amount: number | null;
+          attempts: number;
+          cancelled_at: string | null;
+          created_at: string;
+          error: string | null;
+          failed_at: string | null;
+          id: string;
+          intent: string | null;
+          invoice: string | null;
+          kind: string;
+          next_attempt_at: string | null;
+          refunded_at: string | null;
+          stripe_id: string;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "orphan_stripe_items";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
       process_course_schedule: { Args: Record<PropertyKey, never>; Returns: undefined };
       proof_path_profile: { Args: { p_path: string }; Returns: string };
       record_customer: { Args: { p_customer: string; p_profile: string }; Returns: string };
+      record_orphan: {
+        Args: { p_amount: number; p_intent: string; p_invoice: string; p_kind: string; p_stripe_id: string };
+        Returns: string;
+      };
+      refund_attempt_failed: { Args: { p_error?: string; p_payment: string }; Returns: string };
+      refund_backoff: { Args: { p_attempts: number }; Returns: string };
       refunds_to_process: {
         Args: { p_limit: number };
         Returns: {
@@ -1126,6 +1216,8 @@ export type Database = {
           paid_at: string | null;
           payer_profile_id: string | null;
           receipt_no: number;
+          refund_attempts: number;
+          refund_next_attempt_at: string | null;
           refunded_at: string | null;
           status: Database["public"]["Enums"]["payment_state"];
           stripe_invoice_id: string | null;
@@ -1205,7 +1297,7 @@ export type Database = {
       membership_source: "stripe_subscription" | "one_time" | "admin_year";
       membership_status: "pending" | "active" | "cancelled" | "ended";
       payment_kind: "course" | "membership";
-      payment_state: "pending" | "succeeded" | "failed" | "refund_pending" | "refunded";
+      payment_state: "pending" | "succeeded" | "failed" | "refund_pending" | "refunded" | "refund_failed";
       prof_status: "en_attente" | "valide" | "refuse";
       sport: "jjb" | "grappling" | "mma";
       student_status: "aucun" | "en_attente" | "valide" | "refuse";
@@ -1330,7 +1422,7 @@ export const Constants = {
       membership_source: ["stripe_subscription", "one_time", "admin_year"],
       membership_status: ["pending", "active", "cancelled", "ended"],
       payment_kind: ["course", "membership"],
-      payment_state: ["pending", "succeeded", "failed", "refund_pending", "refunded"],
+      payment_state: ["pending", "succeeded", "failed", "refund_pending", "refunded", "refund_failed"],
       prof_status: ["en_attente", "valide", "refuse"],
       sport: ["jjb", "grappling", "mma"],
       student_status: ["aucun", "en_attente", "valide", "refuse"],

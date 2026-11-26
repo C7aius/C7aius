@@ -291,6 +291,23 @@ Deno.test('routeStripeEvent: charge.refunded total → mark_refunded_by_intent (
   assertEquals(routeStripeEvent(ev('charge.refunded', { id: 'ch_1', payment_intent: null, refunded: true })), { ignore: true });
 });
 
+Deno.test('routeStripeEvent: refund.failed / charge.refund.updated failed → mark_refund_failed ; autre statut → ignore', () => {
+  const PAYID = '11111111-1111-4111-8111-111111111111';
+  const refund = { id: 're_1', object: 'refund', payment_intent: 'pi_r', status: 'failed', failure_reason: 'expired_or_canceled_card', metadata: { payment_id: PAYID } };
+  const want = { fn: 'mark_refund_failed', args: { p_intent: 'pi_r', p_payment: PAYID, p_reason: 'expired_or_canceled_card' } };
+  assertEquals(routeStripeEvent(ev('refund.failed', refund)), want);
+  assertEquals(routeStripeEvent(ev('charge.refund.updated', refund)), want);
+  assertEquals(routeStripeEvent(ev('refund.updated', refund)), want);
+  // remboursement d'un orphelin : pas de payment_id, retrouvé par l'intent
+  assertEquals(routeStripeEvent(ev('refund.failed', { id: 're_2', payment_intent: { id: 'pi_o' }, status: 'failed' })), {
+    fn: 'mark_refund_failed',
+    args: { p_intent: 'pi_o', p_payment: null, p_reason: null },
+  });
+  assertEquals(routeStripeEvent(ev('charge.refund.updated', { ...refund, status: 'succeeded' })), { ignore: true });
+  assertEquals(routeStripeEvent(ev('charge.refund.updated', { ...refund, status: 'pending' })), { ignore: true });
+  assertEquals(routeStripeEvent(ev('refund.failed', { id: 're_3', status: 'failed', payment_intent: null })), { ignore: true });
+});
+
 Deno.test('routeStripeEvent: type inconnu ou objet sans id → ignore', () => {
   assertEquals(routeStripeEvent(ev('customer.created', { id: 'cus_1' })), { ignore: true });
   assertEquals(routeStripeEvent(ev('payment_intent.succeeded', {})), { ignore: true });

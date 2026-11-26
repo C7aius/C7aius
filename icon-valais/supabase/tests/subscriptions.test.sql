@@ -167,8 +167,8 @@ select pg_temp.intent(pg_temp.pmid('t1'), 'pi_t1');
 select pg_temp.as_service();
 select is(public.activate_membership('pi_ch1', null, null), 'activated', 'activate_membership : activated');
 select is(public.activate_membership('pi_ch1', null, null), 'already', 'deuxième appel : already');
-select throws_ok($$ select public.activate_membership('pi_unknown', null, null) $$, 'P0002', null,
-                 'intent inconnu : P0002');
+select is(public.activate_membership('pi_unknown', null, null), 'orphan',
+          'intent inconnu : orphelin à rembourser (0015), plus de P0002');
 reset role;
 select is((select row(status, starts_on, ends_on, auto_renew)::text from pg_temp.m('ch1')),
           row('active'::public.membership_status, pg_temp.today_z(),
@@ -296,8 +296,8 @@ select is(public.activate_membership(null, 'sub_t2', pg_temp.today_z() + 91, pg_
           'sans intent : retrouvée par p_membership');
 select is(public.activate_membership(null, 'sub_t2', pg_temp.today_z() + 91, pg_temp.mid('t2')), 'already',
           'sans intent, deuxième fois : already');
-select throws_ok($$ select public.activate_membership(null, 'sub_none', null) $$, 'P0002', null,
-                 'ni intent, ni abonnement, ni adhésion connus : P0002');
+select is(public.activate_membership(null, 'sub_none', null), 'orphan',
+          'abonnement inconnu (sans montant) : orphelin à annuler (0015)');
 reset role;
 select is((select row(status, ends_on, stripe_subscription_id)::text from pg_temp.m('t2')),
           row('active'::public.membership_status, pg_temp.today_z() + 91, 'sub_t2')::text,
@@ -311,8 +311,8 @@ select pg_temp.as_service();
 select is(public.renew_membership('sub_t', 'in_1', 100, pg_temp.today_z() + 60, 'chf', 'pi_in_1'), 'renewed', 'renouvellement : renewed');
 select is(public.renew_membership('sub_t', 'in_1', 100, pg_temp.today_z() + 60, 'chf', 'pi_in_1'), 'already',
           'même facture deux fois : already');
-select throws_ok($$ select public.renew_membership('sub_unknown', 'in_x', 100, current_date + 30) $$, 'P0002', null,
-                 'abonnement inconnu : P0002');
+select throws_ok($$ select public.renew_membership('sub_unknown', 'in_x', 100, current_date + 30) $$, '55000', null,
+                 'abonnement inconnu sans intent : 55000 missing_intent (0015 : orphelin si intent connu)');
 reset role;
 select is((pg_temp.m('t1')).ends_on, pg_temp.today_z() + 60, 'renouvellement : ends_on = nouvelle fin de période');
 select is((select count(*)::int from public.payments where membership_id = pg_temp.mid('t1')), 2,
@@ -480,7 +480,7 @@ select is((select count(*)::int from public.payments where stripe_invoice_id in 
           'duplicate : sans effet');
 select throws_ok($$ select public.apply_stripe_event('evt_2', 'invoice.paid', 'renew_membership',
                       '{"p_subscription":"sub_unknown","p_invoice":"in_u","p_amount":1,"p_period_end":"2030-01-01"}') $$,
-                 'P0002', null, 'apply_stripe_event : action en échec → erreur');
+                 '55000', null, 'apply_stripe_event : action en échec → erreur');
 select is((select count(*)::int from public.stripe_events where id = 'evt_2'), 0,
           'action en échec : aucun événement enregistré (Stripe réessaiera)');
 select is(pg_temp.hint_of($$ select public.apply_stripe_event('evt_3', 'x', 'admin_update_pricing', '{}') $$),

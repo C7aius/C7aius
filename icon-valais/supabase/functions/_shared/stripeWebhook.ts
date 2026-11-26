@@ -252,6 +252,20 @@ export function routeStripeEvent(event: StripeEvent): Action {
       if (o.refunded !== true || (!intent && !invoice)) return IGNORE;
       return { fn: 'mark_refunded_by_intent', args: { p_intent: intent, p_invoice: invoice } };
     }
+    case 'refund.failed':
+    case 'refund.updated':
+    case 'charge.refund.updated': {
+      // remboursement refusé après coup (carte expirée, compte fermé…) :
+      // l'argent est encore dû → refund_failed (visible de l'admin)
+      if (o.status !== 'failed') return IGNORE;
+      const intent = idOf(o.payment_intent);
+      const payment = uuidOf(obj(o.metadata)?.payment_id);
+      if (!intent && !payment) return IGNORE;
+      return {
+        fn: 'mark_refund_failed',
+        args: { p_intent: intent, p_payment: payment, p_reason: str(o.failure_reason) },
+      };
+    }
     default:
       return IGNORE;
   }
@@ -353,6 +367,8 @@ export async function handleStripeWebhook(req: Request, deps: StripeWebhookDeps)
     return { status: 200, body: { received: true, duplicate: true } };
   }
   if (result === 'amount_mismatch') console.error('stripe-webhook: amount mismatch', event.type, event.id);
+  if (result === 'refund_failed') console.error('stripe-webhook: refund failed', event.type, event.id);
+  if (result === 'orphan') console.warn('stripe-webhook: no membership for this payment, refund queued', event.type, event.id);
   console.log('stripe-webhook:', event.type, event.id, '→', action.fn, result);
   return { status: 200, body: { received: true, result } };
 }

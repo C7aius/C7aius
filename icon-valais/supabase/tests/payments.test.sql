@@ -176,7 +176,7 @@ select is((select array_agg(column_name::text order by column_name) from informa
               and column_name in ('price', 'free_trial', 'payment_status', 'pending_until')),
           array['free_trial', 'payment_status', 'pending_until', 'price'], 'bookings : colonnes de paiement');
 select is(enum_range(null::public.payment_kind)::text, '{course,membership}', 'payment_kind');
-select is(enum_range(null::public.payment_state)::text, '{pending,succeeded,failed,refund_pending,refunded}',
+select is(enum_range(null::public.payment_state)::text, '{pending,succeeded,failed,refund_pending,refunded,refund_failed}',
           'payment_state');
 
 -- ---------------------------------------------------------------------------

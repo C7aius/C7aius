@@ -120,10 +120,12 @@ aussi besoin de `STRIPE_SECRET_KEY`.
 URL `https://<project-ref>.supabase.co/functions/v1/stripe-webhook` (fonction sans JWT,
 `verify_jwt: false` dans `config.jsonc` ; la signature `Stripe-Signature` est vérifiée).
 Événements à cocher : `payment_intent.succeeded`, `payment_intent.payment_failed`, `invoice.paid`,
-`customer.subscription.updated`, `customer.subscription.deleted`, `charge.refunded`.
+`customer.subscription.updated`, `customer.subscription.deleted`, `charge.refunded`, `refund.failed`,
+`charge.refund.updated` (un remboursement refusé après coup par Stripe repasse en `refund_failed`).
 Activer TWINT (Settings → Payment methods) pour les paiements en CHF.
 
-**Retours Stripe Checkout (web)** : `<PUBLIC_APP_URL>/payment-result?status=success|cancel&payment=<payment_id>`.
+**Retours Stripe Checkout (web)** : `<PUBLIC_APP_URL>/payment-result?status=success|cancel&payment=<payment_id>&kind=course|membership`
+(le texte d'annulation dépend de `kind` : place retenue 15 minutes pour un cours, rien d'activé pour une adhésion).
 La page Checkout d'un cours affiche « Remboursé uniquement si le cours est annulé par le professeur. ». Le statut
 affiché doit être relu en base (le webhook fait foi), pas déduit du paramètre `status`.
 
@@ -140,7 +142,26 @@ elle n'appelle la fonction que s'il y a un paiement `refund_pending` ou un abonn
 montant reçu différent du montant attendu (ou un second paiement pour la même réservation) est
 remboursé automatiquement ; un abonnement dont une facture (première ou renouvellement) a un mauvais
 montant est en plus annulé immédiatement chez Stripe. Chaque ligne est traitée isolément : une erreur
-la laisse pour le passage suivant sans bloquer les autres.
+la laisse pour plus tard sans bloquer les autres, avec un délai exponentiel (5 min, 10, 20, … :
+`refund_attempts` / `refund_next_attempt_at`) ; au 8ᵉ échec le paiement passe en **`refund_failed`**, affiché
+en tête de Admin → Paiements (« Remboursements échoués ») : rembourser alors depuis le tableau de bord Stripe
+(`charge.refunded` le marque « Remboursé »). Un paiement à rembourser sans intent connu passe directement en
+`refund_failed`.
+
+Sont aussi remboursés automatiquement (et l'abonnement annulé immédiatement) : un second abonnement activé
+alors qu'un autre se renouvelle déjà pour le même profil (`duplicate_subscription`), une facture de
+renouvellement d'une adhésion terminée (`ended_refund`), un paiement qui aboutit pour une adhésion abandonnée
+(`late_refund`). Une adhésion `pending` depuis plus de 24 h (paiement abandonné) est terminée par
+`process_course_schedule()` et son paiement passe en `failed` ; « Mes paiements » n'affiche aux membres ni les
+paiements en attente ni les échoués (l'admin voit tout).
+
+**Compte supprimé / abonnements orphelins** : `delete-account` annule d'abord chez Stripe
+(`DELETE /v1/subscriptions/<id>`) les abonnements encore actifs de l'appelant et de ses enfants (échec → 500,
+compte intact ; il lui faut donc aussi `STRIPE_SECRET_KEY`). Filet de sécurité : une facture ou un paiement
+Stripe dont l'adhésion n'existe plus est noté dans `orphan_stripe_items` (`'orphan'`, plus d'erreur P0002 que
+Stripe rejouerait sans fin) ; `process-refunds` rembourse l'intent et annule l'abonnement. Un parent ne peut pas
+supprimer par l'API un profil enfant qui a un abonnement actif (42501 `live_subscription`, message traduit) :
+résilier d'abord.
 
 **Quittances** : `GET /functions/v1/receipt?payment=<id>[&lang=fr|de|en|ru]` (jeton de l'utilisateur)
 → PDF, visible du payeur, du bénéficiaire, de son parent et de l'admin (RLS de `payments`) ; jeton

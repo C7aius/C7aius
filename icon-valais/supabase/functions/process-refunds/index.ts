@@ -3,11 +3,14 @@
 // la première facture avait un mauvais montant (subscriptions_to_cancel →
 // DELETE /v1/subscriptions/<id> → mark_subscription_cancelled), puis
 // rembourse les paiements refund_pending (refunds_to_process(20) → POST
-// /v1/refunds, Idempotency-Key refund-<payment_id> → mark_refunded). Une
-// erreur Stripe laisse la ligne pour le passage suivant. Logique dans
-// _shared/payments.ts. Ne journalise jamais de clé.
+// /v1/refunds, Idempotency-Key refund-<payment_id> → mark_refunded), puis
+// traite les orphelins (adhésion supprimée : orphans_to_process → DELETE
+// /v1/subscriptions/<id> et/ou POST /v1/refunds → mark_orphan_done). Une
+// erreur Stripe laisse la ligne pour plus tard (refund_attempt_failed /
+// orphan_attempt_failed : délai exponentiel, 8 essais puis refund_failed /
+// failed_at). Logique dans _shared/payments.ts. Ne journalise jamais de clé.
 import { corsHeaders, json, serviceClient } from '../_shared/http.ts';
-import { handleProcessRefunds, type RefundRow, type SubscriptionToCancel } from '../_shared/payments.ts';
+import { handleProcessRefunds, type OrphanRow, type RefundRow, type SubscriptionToCancel } from '../_shared/payments.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -37,6 +40,23 @@ Deno.serve(async (req) => {
       async markSubscriptionCancelled(id) {
         const { error } = await db.rpc('mark_subscription_cancelled', { p_membership: id });
         fail('mark_subscription_cancelled', error);
+      },
+      async refundAttemptFailed(id, info) {
+        const { error } = await db.rpc('refund_attempt_failed', { p_payment: id, p_error: info });
+        fail('refund_attempt_failed', error);
+      },
+      async orphansToProcess(limit) {
+        const { data, error } = await db.rpc('orphans_to_process', { p_limit: limit });
+        fail('orphans_to_process', error);
+        return (data ?? []) as OrphanRow[];
+      },
+      async markOrphanDone(id, what) {
+        const { error } = await db.rpc('mark_orphan_done', { p_id: id, p_what: what });
+        fail('mark_orphan_done', error);
+      },
+      async orphanAttemptFailed(id, info) {
+        const { error } = await db.rpc('orphan_attempt_failed', { p_id: id, p_error: info });
+        fail('orphan_attempt_failed', error);
       },
     });
     return json(res.status, res.body);

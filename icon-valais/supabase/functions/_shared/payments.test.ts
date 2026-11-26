@@ -66,6 +66,9 @@ Deno.test('buildCheckoutParams: paiement (carte + TWINT) et abonnement, URLs de 
   const urls = resultUrls('https://app.icon-valais.ch', PAY);
   assertEquals(urls.success, `https://app.icon-valais.ch/payment-result?status=success&payment=${PAY}`);
   assertEquals(urls.cancel, `https://app.icon-valais.ch/payment-result?status=cancel&payment=${PAY}`);
+  // genre du paiement transmis à l'écran de retour (texte d'annulation propre au cours / à l'adhésion)
+  assertEquals(resultUrls('https://x.ch', PAY, 'membership').cancel, `https://x.ch/payment-result?status=cancel&payment=${PAY}&kind=membership`);
+  assertEquals(resultUrls('https://x.ch', PAY, 'course').success, `https://x.ch/payment-result?status=success&payment=${PAY}&kind=course`);
 
   const c = buildCheckoutParams({ payment_id: PAY, amount: 20, description: 'Cours', booking_id: BOOK, customer_id: 'cus_1' }, urls.success, urls.cancel);
   assertEquals(c.mode, 'payment');
@@ -434,8 +437,8 @@ Deno.test('create-payment: web → URL Stripe Checkout, retours <PUBLIC_APP_URL>
   assertEquals(ok.status, 200);
   assertEquals(ok.body, { checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_1' });
   const cs = calls.find((c) => c.path === 'checkout/sessions')!;
-  assertEquals(cs.params.get('success_url'), `https://app.icon-valais.ch/payment-result?status=success&payment=${PAY}`);
-  assertEquals(cs.params.get('cancel_url'), `https://app.icon-valais.ch/payment-result?status=cancel&payment=${PAY}`);
+  assertEquals(cs.params.get('success_url'), `https://app.icon-valais.ch/payment-result?status=success&payment=${PAY}&kind=course`);
+  assertEquals(cs.params.get('cancel_url'), `https://app.icon-valais.ch/payment-result?status=cancel&payment=${PAY}&kind=course`);
   assertEquals(cs.params.get('line_items[0][price_data][unit_amount]'), '2000');
   assertEquals(cs.params.get('payment_intent_data[metadata][booking_id]'), BOOK);
   assertEquals(cs.idem, `checkout-${PAY}`);
@@ -453,6 +456,7 @@ Deno.test('create-payment: web abonnement → Checkout mode subscription', async
   assertEquals(cs.params.get('mode'), 'subscription');
   assertEquals(cs.params.get('subscription_data[metadata][membership_id]'), MEM);
   assertStringIncludes(cs.params.get('success_url')!, 'https://app.icon-valais.ch/payment-result?status=success');
+  assertStringIncludes(cs.params.get('cancel_url')!, '&kind=membership');
 });
 
 // ---------------------------------------------------------------------------
@@ -645,4 +649,58 @@ Deno.test('process-refunds: une ligne en erreur (base ou réseau) n\'interrompt 
   assertEquals(res.body, { refunded: 1, cancelled: 1, failed: 2 });
   assertEquals(log.refunded, ['p2']);
   assertEquals(log.cancelled, ['mb']);
+});
+
+Deno.test('process-refunds: remboursement en échec → refund_attempt_failed (délai exponentiel en base)', async () => {
+  const { fetchFn } = fakeStripe({ 'POST refunds': { status: 400, body: { error: { type: 'invalid_request_error', code: 'charge_disputed', message: 'x' } } } });
+  const log: RefundLog = { refunded: [], cancelled: [] };
+  const attempts: [string, string][] = [];
+  const res = await handleProcessRefunds(
+    svcReq(),
+    refundDeps({
+      refundAttemptFailed: (id, info) => {
+        attempts.push([id, info]);
+        return id === 'p1' ? Promise.reject(new Error('db down')) : Promise.resolve();
+      },
+    }, fetchFn, log),
+  );
+  assertEquals(res.body, { refunded: 0, cancelled: 0, failed: 2 });
+  // une erreur d'enregistrement de la tentative n'interrompt pas le lot
+  assertEquals(attempts, [['p1', '400 charge_disputed'], ['p2', '400 charge_disputed']]);
+});
+
+Deno.test('process-refunds: orphelins — abonnement annulé (DELETE), montant remboursé, échec → orphan_attempt_failed', async () => {
+  const { fetchFn, calls } = fakeStripe({
+    'DELETE subscriptions/sub_g': { body: { id: 'sub_g', status: 'canceled' } },
+    'DELETE subscriptions/sub_h': { status: 404, body: { error: { type: 'invalid_request_error', code: 'resource_missing', message: 'gone' } } },
+    'POST refunds': (c) =>
+      c.params.get('payment_intent') === 'pi_bad'
+        ? { status: 500, body: { error: { type: 'api_error', message: 'later' } } }
+        : { body: { id: 're_o' } },
+  });
+  const log: RefundLog = { refunded: [], cancelled: [] };
+  const done: string[] = [];
+  const failedIds: string[] = [];
+  const res = await handleProcessRefunds(
+    svcReq(),
+    refundDeps({
+      refundsToProcess: () => Promise.resolve([]),
+      orphansToProcess: () =>
+        Promise.resolve([
+          { id: 'o1', kind: 'subscription', stripe_id: 'sub_g', intent: 'pi_g2', refunded_at: null, cancelled_at: null },
+          { id: 'o2', kind: 'subscription', stripe_id: 'sub_h', intent: null, refunded_at: null, cancelled_at: null },
+          { id: 'o3', kind: 'payment', stripe_id: 'pi_bad', intent: 'pi_bad', refunded_at: null, cancelled_at: null },
+          { id: 'o4', kind: 'subscription', stripe_id: 'sub_g', intent: 'pi_g3', refunded_at: null, cancelled_at: '2026-11-26T10:00:00Z' },
+        ]),
+      markOrphanDone: (id, what) => (done.push(`${id}:${what}`), Promise.resolve()),
+      orphanAttemptFailed: (id) => (failedIds.push(id), Promise.resolve()),
+    }, fetchFn, log),
+  );
+  assertEquals(res.body, { refunded: 2, cancelled: 2, failed: 1 });
+  assertEquals(done, ['o1:cancelled', 'o1:refunded', 'o2:cancelled', 'o4:refunded']);
+  assertEquals(failedIds, ['o3']);
+  const del = calls.filter((c) => c.method === 'DELETE').map((c) => [c.path, c.idem]);
+  assertEquals(del, [['subscriptions/sub_g', 'orphan-cancel-o1'], ['subscriptions/sub_h', 'orphan-cancel-o2']]);
+  const ref = calls.filter((c) => c.path === 'refunds').map((c) => [c.params.get('payment_intent'), c.idem, c.params.get('metadata[orphan_id]')]);
+  assertEquals(ref, [['pi_g2', 'orphan-refund-o1', 'o1'], ['pi_bad', 'orphan-refund-o3', 'o3'], ['pi_g3', 'orphan-refund-o4', 'o4']]);
 });

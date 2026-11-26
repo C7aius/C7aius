@@ -6,7 +6,8 @@
 // renverra.
 // Événements à cocher dans Stripe : payment_intent.succeeded,
 // payment_intent.payment_failed, invoice.paid, customer.subscription.updated,
-// customer.subscription.deleted, charge.refunded.
+// customer.subscription.deleted, charge.refunded, refund.failed,
+// charge.refund.updated.
 // invoice.paid sans payment_intent (format récent) : intent demandé à Stripe
 // (STRIPE_SECRET_KEY, version épinglée) avant apply_stripe_event.
 // Ne journalise ni le secret, ni la signature, ni le corps de l'événement.

@@ -139,10 +139,17 @@ function parseHttp(v: string | null | undefined): URL | null {
   }
 }
 
-export function resultUrls(origin: string, paymentId: string): { success: string; cancel: string } {
+// kind : l'écran de retour adapte son texte (cours : place retenue 15 min ;
+// adhésion : rien d'activé).
+export function resultUrls(
+  origin: string,
+  paymentId: string,
+  kind?: 'course' | 'membership',
+): { success: string; cancel: string } {
   const base = `${origin}/payment-result?status=`;
   const p = encodeURIComponent(paymentId);
-  return { success: `${base}success&payment=${p}`, cancel: `${base}cancel&payment=${p}` };
+  const k = kind ? `&kind=${kind}` : '';
+  return { success: `${base}success&payment=${p}${k}`, cancel: `${base}cancel&payment=${p}${k}` };
 }
 
 // ---------------------------------------------------------------------------
@@ -298,7 +305,7 @@ export async function handleCreatePayment(req: Request, deps: CreatePaymentDeps)
 
     // 3a. Web : Stripe Checkout
     if (body.platform === 'web') {
-      const urls = resultUrls(origin!, row.payment_id);
+      const urls = resultUrls(origin!, row.payment_id, body.kind);
       const session = (await stripe(
         'checkout/sessions',
         buildCheckoutParams({ ...row, customer_id: customer }, urls.success, urls.cancel),
@@ -479,6 +486,16 @@ export async function handleCancelSubscription(req: Request, deps: CancelSubscri
 // ---------------------------------------------------------------------------
 export type RefundRow = { id: string; stripe_payment_intent_id: string | null };
 export type SubscriptionToCancel = { membership_id: string; stripe_subscription_id: string };
+// orphan_stripe_items : abonnement / paiement Stripe sans adhésion en base
+// (supprimée avec le compte) : abonnement à annuler et/ou montant à rendre.
+export type OrphanRow = {
+  id: string;
+  kind: 'subscription' | 'payment';
+  stripe_id: string;
+  intent: string | null;
+  refunded_at: string | null;
+  cancelled_at: string | null;
+};
 
 export type ProcessRefundsDeps = {
   serviceKey: string | undefined; // SUPABASE_SERVICE_ROLE_KEY
@@ -488,6 +505,13 @@ export type ProcessRefundsDeps = {
   markRefunded(paymentId: string): Promise<void>;
   subscriptionsToCancel(limit: number): Promise<SubscriptionToCancel[]>;
   markSubscriptionCancelled(membershipId: string): Promise<void>;
+  // refund_attempt_failed : tentative suivante différée (délai exponentiel),
+  // 8e échec → refund_failed (visible de l'admin)
+  refundAttemptFailed?(paymentId: string, error: string): Promise<void>;
+  // orphans_to_process / mark_orphan_done / orphan_attempt_failed
+  orphansToProcess?(limit: number): Promise<OrphanRow[]>;
+  markOrphanDone?(id: string, what: 'cancelled' | 'refunded'): Promise<void>;
+  orphanAttemptFailed?(id: string, error: string): Promise<void>;
 };
 
 export const REFUND_BATCH = 20;
@@ -540,7 +564,8 @@ export async function handleProcessRefunds(req: Request, deps: ProcessRefundsDep
     }
   }
 
-  // 2. Remboursements (montant total de l'intent)
+  // 2. Remboursements (montant total de l'intent) ; refunds_to_process passe
+  //    d'abord en refund_failed les lignes sans intent
   for (const r of await deps.refundsToProcess(REFUND_BATCH)) {
     if (!r.stripe_payment_intent_id) continue;
     try {
@@ -560,6 +585,49 @@ export async function handleProcessRefunds(req: Request, deps: ProcessRefundsDep
     } catch (e) {
       failed++;
       console.error('process-refunds: refund failed', r.id, errInfo(e));
+      try {
+        await deps.refundAttemptFailed?.(r.id, errInfo(e));
+      } catch (e2) {
+        console.error('process-refunds: could not record refund attempt', r.id, errInfo(e2));
+      }
+    }
+  }
+
+  // 3. Orphelins (adhésion supprimée) : abonnement annulé, montant rendu
+  for (const o of (await deps.orphansToProcess?.(REFUND_BATCH)) ?? []) {
+    try {
+      if (o.kind === 'subscription' && !o.cancelled_at) {
+        try {
+          await stripeRequest(`subscriptions/${o.stripe_id}`, {}, key, deps.fetch, `orphan-cancel-${o.id}`, 'DELETE');
+        } catch (e) {
+          if (!subscriptionAlreadyGone(e)) throw e;
+        }
+        await deps.markOrphanDone!(o.id, 'cancelled');
+        cancelled++;
+      }
+      if (o.intent && !o.refunded_at) {
+        try {
+          await stripeRequest(
+            'refunds',
+            { payment_intent: o.intent, 'metadata[orphan_id]': o.id },
+            key,
+            deps.fetch,
+            `orphan-refund-${o.id}`,
+          );
+        } catch (e) {
+          if (!refundAlreadyDone(e)) throw e;
+        }
+        await deps.markOrphanDone!(o.id, 'refunded');
+        refunded++;
+      }
+    } catch (e) {
+      failed++;
+      console.error('process-refunds: orphan failed', o.id, errInfo(e));
+      try {
+        await deps.orphanAttemptFailed?.(o.id, errInfo(e));
+      } catch (e2) {
+        console.error('process-refunds: could not record orphan attempt', o.id, errInfo(e2));
+      }
     }
   }
   return { status: 200, body: { refunded, cancelled, failed } };
