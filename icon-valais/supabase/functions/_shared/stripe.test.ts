@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects, assertStringIncludes, assertThrows } from 'jsr:@std/assert@1';
-import { encodeForm, StripeError, stripeRequest, toCents } from './stripe.ts';
+import { encodeForm, STRIPE_API_VERSION, StripeError, stripeRequest, toCents } from './stripe.ts';
 
 Deno.test('toCents: arrondi au centime, sans erreur de virgule flottante', () => {
   assertEquals(toCents(19.99), 1999);
@@ -83,4 +83,24 @@ Deno.test('stripeRequest: réseau en échec ou réponse illisible → StripeErro
   assertEquals(e1.status, 0);
   const garbage = (() => Promise.resolve(new Response('<html>', { status: 200 }))) as typeof fetch;
   await assertRejects(() => stripeRequest('customers', {}, 'sk', garbage), StripeError);
+});
+
+Deno.test('stripeRequest: version de l\'API épinglée (Stripe-Version) sur chaque appel', async () => {
+  assertEquals(STRIPE_API_VERSION, '2024-06-20');
+  const seen: Captured[] = [];
+  await stripeRequest('customers', {}, 'sk', fakeFetch(200, {}, seen));
+  assertEquals(new Headers(seen[0].init.headers).get('Stripe-Version'), '2024-06-20');
+});
+
+Deno.test('stripeRequest: GET / DELETE — paramètres dans l\'URL, sans corps', async () => {
+  const seen: Captured[] = [];
+  await stripeRequest('payment_intents/pi_1', { 'expand[0]': 'customer' }, 'sk', fakeFetch(200, {}, seen), undefined, 'GET');
+  assertEquals(seen[0].url, 'https://api.stripe.com/v1/payment_intents/pi_1?expand[0]=customer');
+  assertEquals(seen[0].init.method, 'GET');
+  assertEquals(seen[0].init.body, undefined);
+  assertEquals(new Headers(seen[0].init.headers).get('Content-Type'), null);
+  await stripeRequest('subscriptions/sub_1', {}, 'sk', fakeFetch(200, {}, seen), 'cancel-1', 'DELETE');
+  assertEquals(seen[1].url, 'https://api.stripe.com/v1/subscriptions/sub_1');
+  assertEquals(seen[1].init.method, 'DELETE');
+  assertEquals(new Headers(seen[1].init.headers).get('Idempotency-Key'), 'cancel-1');
 });

@@ -90,6 +90,57 @@ réessayée la minute suivante (jusqu'à `max_attempts`). Les jetons signalés
 selon `profiles.language`) indiquent le sport et la date et l'heure du cours (heure de Zurich), et le
 prénom de l'enfant quand un parent est notifié pour lui.
 
+## Paiements Stripe
+
+Edge Functions : `create-payment`, `cancel-subscription`, `process-refunds`, `receipt` et `stripe-webhook`
+(`supabase/functions`, logique testée dans `_shared/payments.ts`, `_shared/receipt.ts`,
+`_shared/stripeWebhook.ts`).
+
+| Secret | Rôle |
+| --- | --- |
+| `STRIPE_SECRET_KEY` | clé secrète (`sk_test_…` / `sk_live_…`) ; jamais journalisée ni renvoyée |
+| `STRIPE_PUBLISHABLE_KEY` | clé publiable (`pk_…`), renvoyée à l'app native pour la PaymentSheet |
+| `STRIPE_WEBHOOK_SECRET` | secret de signature de l'endpoint webhook (`whsec_…`) |
+| `PUBLIC_APP_URL` | origine de l'app web (ex. `https://app.icon-valais.ch`) pour les retours de Stripe Checkout ; à défaut, l'en-tête `Origin` de la requête |
+
+```sh
+npx supabase secrets set STRIPE_SECRET_KEY=sk_live_... STRIPE_PUBLISHABLE_KEY=pk_live_... \
+  STRIPE_WEBHOOK_SECRET=whsec_... PUBLIC_APP_URL=https://app.icon-valais.ch
+```
+
+**Version de l'API Stripe : `2024-06-20`**, épinglée par l'en-tête `Stripe-Version` de chaque appel
+(`STRIPE_API_VERSION` dans `_shared/stripe.ts`). Créer l'endpoint webhook avec **la même version**
+(les événements `invoice.*` y contiennent encore `payment_intent`, utile aux remboursements
+d'abonnement).
+
+**Webhook** (tableau de bord Stripe → Developers → Webhooks → Add endpoint) :
+URL `https://<project-ref>.supabase.co/functions/v1/stripe-webhook` (fonction sans JWT,
+`verify_jwt: false` dans `config.jsonc` ; la signature `Stripe-Signature` est vérifiée).
+Événements à cocher : `payment_intent.succeeded`, `payment_intent.payment_failed`, `invoice.paid`,
+`customer.subscription.updated`, `customer.subscription.deleted`, `charge.refunded`.
+Activer TWINT (Settings → Payment methods) pour les paiements en CHF.
+
+**Retours Stripe Checkout (web)** : `<origin>/payment-result?status=success|cancel&payment=<payment_id>`,
+où `<origin>` = `PUBLIC_APP_URL`, sinon l'en-tête `Origin` de l'appel à `create-payment`. Le statut
+affiché doit être relu en base (le webhook fait foi), pas déduit du paramètre `status`.
+
+**Metadata** (le webhook en dépend) : PaymentIntent `payment_id` + `booking_id` (cours) ou
+`membership_id` (adhésion payée en une fois) ; Subscription `membership_id` + `payment_id`.
+Un intent Checkout, inconnu jusqu'au paiement, est rattaché au paiement par `metadata.payment_id`.
+
+**Clients Stripe** : un client par profil payeur, créé au premier paiement (`record_customer`),
+réutilisé ensuite. **Produit** des abonnements : `icon_valais_membership`, créé automatiquement.
+
+**Remboursements** : tâche `pg_cron` `process-refunds` toutes les 5 minutes (migration
+`0012_payment_followups.sql`, mêmes secrets Vault `functions_url` / `service_role_key` que `send-push`) :
+elle n'appelle la fonction que s'il y a un paiement `refund_pending` ou un abonnement à annuler. Un
+montant reçu différent du montant attendu (ou un second paiement pour la même réservation) est
+remboursé automatiquement ; un abonnement dont la première facture a un mauvais montant est
+annulé immédiatement chez Stripe.
+
+**Quittances** : `GET /functions/v1/receipt?payment=<id>[&lang=fr|de|en|ru]` (jeton de l'utilisateur)
+→ PDF, visible du payeur, du bénéficiaire, de son parent et de l'admin (RLS de `payments`).
+
 ## Lancer l'application
 
 ```bash

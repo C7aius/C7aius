@@ -233,25 +233,25 @@ select pg_temp.intent(pg_temp.pmid('am1'), 'pi_am1');
 select pg_temp.as_service();
 select is(public.activate_membership('pi_am1', null, null, null, null, 5000, 'chf'), 'amount_mismatch',
           'adhésion : montant différent → amount_mismatch');
-select is(public.activate_membership('pi_am1', null, null, null, null, 10000, 'eur'), 'amount_mismatch',
-          'adhésion : devise différente → amount_mismatch');
+select is(public.activate_membership('pi_am1', null, null, null, null, 10000, 'eur'), 'already',
+          'adhésion : déjà à rembourser (0012) → already');
 reset role;
 select is((select status::text || ' ' || error from public.payments where id = pg_temp.pmid('am1')),
-          'failed amount_mismatch: received 10000 eur, expected 10000 chf', 'montant différent : paiement failed, note d''erreur');
+          'refund_pending amount_mismatch: received 5000 chf, expected 10000 chf',
+          'montant différent : paiement refund_pending (0012), note d''erreur');
 select is((pg_temp.m('am1')).status, 'pending'::public.membership_status, 'montant différent : adhésion non activée');
 select pg_temp.as_service();
-select is(public.activate_membership('pi_am1', null, null, null, null, 10000, 'CHF'), 'activated',
-          'montant et devise conformes : activated');
+select is(public.activate_membership('pi_am1', null, null, null, null, 10000, 'CHF'), 'already',
+          'montant conforme ensuite : already (l''argent reçu est rendu)');
 reset role;
-select is((select status::text || ' ' || coalesce(error, '-') from public.payments where id = pg_temp.pmid('am1')),
-          'succeeded -', 'conforme : succeeded, note effacée');
+select is((pg_temp.m('am1')).status, 'pending'::public.membership_status, 'toujours non activée');
 select pg_temp.as_service();
 select is(public.confirm_payment('pi_course', 'card', 1000, 'chf'), 'amount_mismatch', 'cours : montant différent → amount_mismatch');
-select is(public.settle_payment_intent('pi_course', 'card', 2000, 'usd'), 'amount_mismatch',
-          'settle : devise différente → amount_mismatch');
+select is(public.settle_payment_intent('pi_course', 'card', 2000, 'usd'), 'already',
+          'settle : déjà à rembourser → already');
 reset role;
-select is((select status::text from public.payments where stripe_payment_intent_id = 'pi_course'), 'failed',
-          'cours : paiement failed');
+select is((select status::text from public.payments where stripe_payment_intent_id = 'pi_course'), 'refund_pending',
+          'cours : paiement refund_pending (0012)');
 select pg_temp.as_service();
 
 -- ---------------------------------------------------------------------------

@@ -4,6 +4,14 @@
 
 export const STRIPE_API = 'https://api.stripe.com/v1';
 
+// Version de l'API Stripe épinglée (en-tête Stripe-Version de chaque appel ;
+// à reprendre pour l'endpoint du webhook dans le tableau de bord, voir
+// README). Avec cette version, latest_invoice.payment_intent d'un abonnement
+// et invoice.payment_intent des événements existent encore.
+export const STRIPE_API_VERSION = '2024-06-20';
+
+export type StripeMethod = 'GET' | 'POST' | 'DELETE';
+
 // CHF → centimes (entier). Montant négatif ou non fini → RangeError.
 export function toCents(chf: number): number {
   if (!Number.isFinite(chf) || chf < 0) throw new RangeError('toCents: amount must be a finite number >= 0');
@@ -49,26 +57,38 @@ export class StripeError extends Error {
   }
 }
 
-// POST application/x-www-form-urlencoded vers https://api.stripe.com/v1/<path>.
-// idempotencyKey : en-tête Idempotency-Key (rejouer la même opération sans
-// la refaire). Renvoie le JSON de la réponse ; erreur → StripeError.
+// Appel https://api.stripe.com/v1/<path> : POST (corps
+// application/x-www-form-urlencoded, par défaut), GET ou DELETE (paramètres
+// dans l'URL). idempotencyKey : en-tête Idempotency-Key (rejouer la même
+// opération sans la refaire). Renvoie le JSON de la réponse ; erreur →
+// StripeError.
 export async function stripeRequest(
   path: string,
   params: Record<string, string>,
   key: string,
   fetchFn: typeof fetch = fetch,
   idempotencyKey?: string,
+  method: StripeMethod = 'POST',
 ): Promise<unknown> {
   const clean = path.replace(/^\/+/, '').replace(/^v1\//, '');
   const headers: Record<string, string> = {
     Authorization: `Bearer ${key}`,
-    'Content-Type': 'application/x-www-form-urlencoded',
+    'Stripe-Version': STRIPE_API_VERSION,
   };
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
+  const form = encodeForm(params);
+  let url = `${STRIPE_API}/${clean}`;
+  const init: RequestInit = { method, headers };
+  if (method === 'POST') {
+    headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    init.body = form;
+  } else if (form) {
+    url += `?${form}`;
+  }
 
   let res: Response;
   try {
-    res = await fetchFn(`${STRIPE_API}/${clean}`, { method: 'POST', headers, body: encodeForm(params) });
+    res = await fetchFn(url, init);
   } catch (e) {
     throw new StripeError(0, null, null, e instanceof Error ? e.message : 'network error');
   }

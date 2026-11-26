@@ -184,7 +184,14 @@ export function routeStripeEvent(event: StripeEvent): Action {
           },
         };
       }
-      if (uuidOf(meta.booking_id)) return { fn: 'confirm_payment', args: { p_intent: id, p_method: method, ...money } };
+      // p_payment : un intent Stripe Checkout n'est connu qu'au paiement ; il
+      // est rattaché au paiement de metadata.payment_id
+      if (uuidOf(meta.booking_id)) {
+        return {
+          fn: 'confirm_payment',
+          args: { p_intent: id, p_method: method, ...money, p_payment: uuidOf(meta.payment_id) },
+        };
+      }
       // sans metadata (ex. facture d'abonnement) : routage par l'intent en base
       return { fn: 'settle_payment_intent', args: { p_intent: id, p_method: method, ...money } };
     }

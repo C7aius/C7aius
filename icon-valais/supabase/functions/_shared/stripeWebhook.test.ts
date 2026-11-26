@@ -121,7 +121,10 @@ Deno.test('routeStripeEvent: payment_intent.succeeded cours (metadata.booking_id
         currency: 'chf',
       }),
     ),
-    { fn: 'confirm_payment', args: { p_intent: 'pi_c', p_method: 'card', p_amount_cents: 2000, p_currency: 'chf' } },
+    {
+      fn: 'confirm_payment',
+      args: { p_intent: 'pi_c', p_method: 'card', p_amount_cents: 2000, p_currency: 'chf', p_payment: null },
+    },
   );
   // moyen lu dans la charge (anciennes versions de l'API)
   assertEquals(
@@ -133,7 +136,26 @@ Deno.test('routeStripeEvent: payment_intent.succeeded cours (metadata.booking_id
         charges: { data: [{ payment_method_details: { type: 'twint' } }] },
       }),
     ),
-    { fn: 'confirm_payment', args: { p_intent: 'pi_c', p_method: 'twint', p_amount_cents: null, p_currency: null } },
+    {
+      fn: 'confirm_payment',
+      args: { p_intent: 'pi_c', p_method: 'twint', p_amount_cents: null, p_currency: null, p_payment: null },
+    },
+  );
+  // Checkout : l'intent n'est connu qu'au paiement → paiement retrouvé par metadata.payment_id
+  assertEquals(
+    routeStripeEvent(
+      ev('payment_intent.succeeded', {
+        id: 'pi_cs',
+        metadata: { payment_id: MID.toUpperCase(), booking_id: BID },
+        payment_method: { type: 'twint' },
+        amount_received: 2000,
+        currency: 'chf',
+      }),
+    ),
+    {
+      fn: 'confirm_payment',
+      args: { p_intent: 'pi_cs', p_method: 'twint', p_amount_cents: 2000, p_currency: 'chf', p_payment: MID },
+    },
   );
 });
 
@@ -331,7 +353,7 @@ Deno.test('handleStripeWebhook: action routée appelée, événement enregistré
       id: 'evt_ok',
       type: 'payment_intent.succeeded',
       fn: 'confirm_payment',
-      args: { p_intent: 'pi_c', p_method: 'card', p_amount_cents: null, p_currency: null },
+      args: { p_intent: 'pi_c', p_method: 'card', p_amount_cents: null, p_currency: null, p_payment: null },
     },
   ]);
 });
