@@ -141,7 +141,8 @@ Déclarée par l'élève ; **un prof peut la modifier** sur le compte de n'impor
 ### Réservation (élève)
 - Réservation et désinscription libres, sans délai ni pénalité, pas de liste d'attente.
 - Adhérent : prix adhérent (le plus souvent 0).
-- Non-adhérent : paie le prix non-adhérent à la réservation ; **maximum 10 réservations** au total ; ensuite l'app lui propose un abonnement.
+- Non-adhérent : ses **10 premières réservations sont gratuites** (cours d'essai) ; ensuite il paie le prix non-adhérent du cours (défaut **20 CHF**, modifiable par cours), sans limite, et l'app lui propose l'abonnement à chaque réservation payante. Compteur : seulement les réservations faites en tant que non-adhérent, sans les désinscriptions ni les cours annulés par le club.
+- Une réservation payante est retenue 15 minutes en attente du paiement, puis confirmée par Stripe.
 
 ### Appel
 - Le prof assigné (ou l'admin) coche les présents, pendant ou après le cours.
@@ -149,7 +150,7 @@ Déclarée par l'élève ; **un prof peut la modifier** sur le compte de n'impor
 
 ## 8. Abonnements et paiements
 
-| Durée | Prix | Étudiant (-30 %) | Enfant (-50 %) |
+| Durée | Prix | Étudiant (-30 %) | Enfant < 16 ans (-50 %) |
 |---|---|---|---|
 | 1 mois | 100 CHF | 70 CHF | 50 CHF |
 | 3 mois | 250 CHF | 175 CHF | 125 CHF |
@@ -157,14 +158,18 @@ Déclarée par l'élève ; **un prof peut la modifier** sur le compte de n'impor
 | 12 mois | 650 CHF | 455 CHF | 325 CHF |
 
 - Les prix de base et les pourcentages de réduction (étudiant, enfant) sont modifiables par l'admin.
-- Tarif enfant : appliqué automatiquement si l'âge < 18 ans. Réductions non cumulables (la plus avantageuse s'applique).
+- Tarif enfant : appliqué automatiquement si l'âge < **16 ans**. Réductions non cumulables (la plus avantageuse s'applique).
+- Prix par défaut d'un nouveau cours pour les non-adhérents : 20 CHF (modifiable par l'admin).
+- Un parent peut payer l'abonnement (tarif enfant) et les cours de son enfant depuis son compte.
+- Est adhérent : abonnement Stripe actif, OU abonnement payé en une fois (TWINT) non échu, OU « payé pour l'année » marqué par l'admin.
 
 - Renouvellement automatique (carte / Apple Pay / Google Pay via Stripe).
+- TWINT : abonnement payé en une fois, sans renouvellement ; notification push de rappel 7 jours avant la fin.
 - Résiliation possible dans l'app (fin à l'échéance en cours).
-- Tarif étudiant : l'élève envoie un justificatif (PDF, ou photo prise avec l'appareil photo de l'app) ; l'admin valide ; le justificatif est supprimé après décision.
+- Tarif étudiant : l'élève envoie un justificatif (PDF, ou photo prise avec l'appareil photo de l'app) ; l'admin valide ou refuse ; le justificatif est **conservé** (stockage privé, lisible par l'élève et l'admin seulement, supprimé avec le compte).
 - Cours à l'unité : carte, TWINT, Apple Pay, Google Pay.
-- Remboursement : **uniquement si le cours est annulé** (remboursement automatique via Stripe). Désinscription d'un cours payé = pas de remboursement. Mention discrète affichée avant le paiement : « Remboursé uniquement en cas d'annulation du cours. »
-- Quittances PDF téléchargeables dans l'app (historique des paiements).
+- Remboursement : **uniquement si le cours est annulé** (remboursement automatique via Stripe). Désinscription d'un cours payé = pas de remboursement. Mention discrète affichée avant le paiement : « Remboursé uniquement si le cours est annulé par le professeur. » (remboursement automatique pour toute annulation, par un prof ou l'admin).
+- Quittances PDF téléchargeables dans l'app (page « Mes paiements »), en-tête « Icon Valais Conthey », sans TVA.
 
 ## 9. Classements et statistiques
 
@@ -184,6 +189,7 @@ Push uniquement :
 - cours annulé → inscrits
 - créneau vacant 24 h avant → profs
 - compte prof validé → le prof
+- abonnement TWINT qui se termine dans 7 jours → l'adhérent (ou son parent)
 
 E-mails techniques indispensables (gérés par Supabase) : réinitialisation du mot de passe, confirmation parentale.
 
@@ -212,7 +218,7 @@ E-mails techniques indispensables (gérés par Supabase) : réinitialisation du 
 
 1. Âge minimum sans parent : 16 ans.
 2. « Payé pour l'année courante » = adhérent jusqu'au 31 décembre.
-3. Limite non-adhérent : 10 réservations au total, cours désinscrits non comptés.
+3. Non-adhérent : 10 premières réservations gratuites, puis payantes (décision du propriétaire, 2026-11-26).
 4. La fonction « cours privé » est réservée à l'admin, mais le cours créé est visible et réservable par tous.
 5. Prise d'un créneau vacant : premier prof qui clique.
 6. Annulation d'un cours : admin + prof créateur.
@@ -222,7 +228,7 @@ E-mails techniques indispensables (gérés par Supabase) : réinitialisation du 
 10. Justificatif étudiant supprimé après validation.
 11. Ceintures adultes : blanche, bleue, violette, marron, noire.
 12. Places indicatives par défaut : 20.
-13. Tarif enfant appliqué automatiquement sous 18 ans ; réductions non cumulables.
+13. Tarif enfant appliqué automatiquement sous 16 ans ; réductions non cumulables.
 
 ## 14. Laissé au développeur
 
