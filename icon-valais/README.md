@@ -146,6 +146,31 @@ la laisse pour le passage suivant sans bloquer les autres.
 → PDF, visible du payeur, du bénéficiaire, de son parent et de l'admin (RLS de `payments`) ; jeton
 invalide → 401 ; paiement non réglé ou rendu pour anomalie (montant différent, double paiement) → 409.
 
+**Cartes de test** (mode test Stripe, n'importe quelle date future et CVC) : `4242 4242 4242 4242` (succès),
+`4000 0000 0000 9995` (refusée, fonds insuffisants), `4000 0025 0000 3155` (authentification 3-D Secure requise).
+TWINT : en mode test, la page de test Stripe permet de simuler le succès ou l'échec. Pour recevoir les
+événements en local : `stripe listen --forward-to http://127.0.0.1:54321/functions/v1/stripe-webhook`
+(le `whsec_…` affiché devient `STRIPE_WEBHOOK_SECRET`).
+
+**Mise en route** : créer le compte Stripe, activer TWINT, définir les quatre secrets ci-dessus
+(`npx supabase secrets set …`), déployer les fonctions (`npx supabase functions deploy`), ajouter l'endpoint
+webhook avec les six événements, créer les secrets Vault `functions_url` / `service_role_key` (cron des
+remboursements, voir « Notifications et tâches planifiées »), puis régler les tarifs dans
+Admin → Tarifs.
+
+**Limites** :
+
+- Une réservation payante retient la place 15 minutes ; passé ce délai la place peut être reprise, et un
+  paiement qui aboutit trop tard pour une réservation qui ne peut plus être honorée est remboursé
+  automatiquement (`late_refund`).
+- Remboursement uniquement quand le cours est annulé (total, jamais partiel) ; un élève qui se désinscrit
+  d'un cours payé garde sa réservation payée et peut se réinscrire sans repayer.
+- Tâche `process-refunds` toutes les 5 minutes : un remboursement n'est donc pas instantané
+  (« Remboursement en cours » jusqu'au passage suivant).
+- Le webhook fait foi : l'application ne déduit jamais un paiement réussi du retour de Stripe.
+- Les nouveaux comptes de test Stripe n'ont pas toujours TWINT activé ; sans lui, seule la carte est proposée.
+- Les paiements natifs (PaymentSheet) ne sont testables que sur appareil (plan 5) ; sur le web, Stripe Checkout.
+
 ## Lancer l'application
 
 ```bash
@@ -164,7 +189,7 @@ deno test --config supabase/functions/deno.json supabase/functions/_shared   # E
 
 ### Test de bout en bout (Playwright)
 
-`e2e/smoke.e2e.mjs` pilote l'application web contre la stack locale (13 flux). Plan 1 : inscription
+`e2e/smoke.e2e.mjs` pilote l'application web contre la stack locale (18 flux). Plan 1 : inscription
 élève, inscription professeur (écran « en attente »), validation par un administrateur, inscription d'un
 mineur (écran de consentement parental, adresse du parent affichée, pas de faux « e-mail envoyé »),
 changement de langue, langue conservée après reconnexion et rechargement, « mot de passe oublié » de bout
@@ -174,7 +199,17 @@ puis réserve de nouveau ; un prof prend le créneau vacant ; le prof fait l'app
 passé proche en SQL) ; l'admin annule « ce cours et les suivants » (statut « Annulé » et lignes
 `course_cancelled` dans `notification_outbox`, vérifiées en SQL) ; `process_course_schedule()` appelé en
 SQL fait passer un cours vacant commencé en « Open Mat » (et écrit les lignes `slot_vacant` d'un cours
-vacant dans moins de 24 h). Les étapes de mise en place (promotion de l'admin, déplacement d'un cours dans
+vacant dans moins de 24 h). Plan 3 (paiements, flux 14 à 18, Stripe simulé : aucun appel réseau vers Stripe) : un non-adhérent réserve
+10 cours gratuits puis le 11ᵉ affiche 20.00 CHF et la mention de remboursement, « Payer » est repris
+depuis le planning, puis `payment_intent.succeeded` est rejoué (`e2e/stripe-route.ts` exécute le vrai
+`routeStripeEvent` du webhook, puis la RPC `apply_stripe_event`) → réservation payée, « Payé » dans Mes
+paiements ; la vraie fonction `receipt` est lancée avec `deno run` (port 8000) et le PDF vérifié avec
+`pdftotext` (poppler) ; l'admin annule le cours → « Remboursement en cours », puis `mark_refunded` →
+« Remboursé » ; un parent prend l'abonnement 1 mois de son enfant de 12 ans (50.00 CHF, `invoice.paid`) et
+l'enfant réserve à 0 CHF ; un justificatif étudiant (PDF) est validé par l'admin → 70.00 CHF (−30 %).
+Prérequis supplémentaires : `deno` et `pdftotext` dans le PATH, `.env` lisible (clés de l'API locale).
+Les appels réels à l'API Stripe (create-payment, abonnements, TWINT) ne sont pas couverts : voir « Paiements Stripe ».
+Les étapes de mise en place (promotion de l'admin, déplacement d'un cours dans
 le passé, appel de `process_course_schedule()`, lecture de l'outbox) passent par `docker exec ... psql`.
 En cas d'échec d'un flux, une capture `FAIL-<n>.png` est écrite dans `SHOT_DIR`.
 
