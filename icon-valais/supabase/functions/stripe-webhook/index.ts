@@ -1,8 +1,9 @@
 // POST (Stripe uniquement, sans JWT : verify_jwt = false dans config.jsonc) :
 // webhook Stripe. Corps brut vérifié par la signature (STRIPE_WEBHOOK_SECRET)
-// → 400 sinon ; événement enregistré dans stripe_events (déjà reçu → 200 sans
-// effet) ; fonction SQL de l'action appelée (service_role) ; 200. Action en
-// échec → événement oublié et 500 : Stripe le renverra.
+// → 400 sinon ; puis apply_stripe_event (service_role) enregistre
+// l'événement et applique l'action dans la même transaction (déjà reçu →
+// 200 sans effet) ; 200. Action en échec → rien d'enregistré, 500 : Stripe le
+// renverra.
 // Événements à cocher dans Stripe : payment_intent.succeeded,
 // payment_intent.payment_failed, invoice.paid, customer.subscription.updated,
 // customer.subscription.deleted, charge.refunded.
@@ -16,20 +17,10 @@ Deno.serve(async (req) => {
     const res = await handleStripeWebhook(req, {
       secret: Deno.env.get('STRIPE_WEBHOOK_SECRET') || undefined,
       nowSec: () => Math.floor(Date.now() / 1000),
-      async recordEvent(id, type) {
-        const { error } = await db.from('stripe_events').insert({ id, type });
-        if (!error) return true;
-        if (error.code === '23505') return false; // déjà reçu
-        throw new Error(`could not record event: ${error.code ?? ''} ${error.message}`);
-      },
-      async forgetEvent(id) {
-        const { error } = await db.from('stripe_events').delete().eq('id', id);
-        if (error) throw new Error(`could not forget event: ${error.message}`);
-      },
-      async call(fn, args) {
-        const { data, error } = await db.rpc(fn, args);
-        if (error) throw new Error(`${fn}: ${error.code ?? ''} ${error.message}`);
-        return data;
+      async apply(id, type, fn, args) {
+        const { data, error } = await db.rpc('apply_stripe_event', { p_id: id, p_type: type, p_fn: fn, p_args: args });
+        if (error) throw new Error(`apply_stripe_event(${fn}): ${error.code ?? ''} ${error.message}`);
+        return String(data);
       },
     });
     return json(res.status, res.body);

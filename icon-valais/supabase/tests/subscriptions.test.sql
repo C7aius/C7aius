@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(99);
+select plan(142);
 
 create temp table ids (k text primary key, v uuid);
 grant all on ids to authenticated, service_role;
@@ -93,6 +93,9 @@ insert into ids values
   ('s',  pg_temp.pid('55000000-0000-0000-0000-000000000055')),
   ('mi', pg_temp.pid('e0000000-0000-0000-0000-00000000000e')),
   ('t',  pg_temp.pid('77000000-0000-0000-0000-000000000077'));
+-- w : adulte avec « payé pour l'année » (chevauchements)
+select pg_temp.signup('88000000-0000-0000-0000-000000000088', 'sbw@t.ch', '{"first_name":"Wid","last_name":"Year","age":33,"sports":["jjb"]}');
+insert into ids values ('w', pg_temp.pid('88000000-0000-0000-0000-000000000088'));
 insert into public.profiles (parent_profile_id, first_name, last_name, age, sports)
 values (pg_temp.k('pa'), 'Kid', 'Rent', 12, '{jjb}'),
        (pg_temp.k('o'), 'Kid', 'Other', 8, '{jjb}');
@@ -222,6 +225,36 @@ select is(pg_temp.hint_of($$ select public.activate_membership('pi_course', null
           'paiement de cours : invalid_field');
 
 -- ---------------------------------------------------------------------------
+-- Montant et devise de l'événement comparés au montant en base
+-- ---------------------------------------------------------------------------
+select pg_temp.smp('am1', pg_temp.k('o'), pg_temp.k('o'), 1);
+reset role;
+select pg_temp.intent(pg_temp.pmid('am1'), 'pi_am1');
+select pg_temp.as_service();
+select is(public.activate_membership('pi_am1', null, null, null, null, 5000, 'chf'), 'amount_mismatch',
+          'adhésion : montant différent → amount_mismatch');
+select is(public.activate_membership('pi_am1', null, null, null, null, 10000, 'eur'), 'amount_mismatch',
+          'adhésion : devise différente → amount_mismatch');
+reset role;
+select is((select status::text || ' ' || error from public.payments where id = pg_temp.pmid('am1')),
+          'failed amount_mismatch: received 10000 eur, expected 10000 chf', 'montant différent : paiement failed, note d''erreur');
+select is((pg_temp.m('am1')).status, 'pending'::public.membership_status, 'montant différent : adhésion non activée');
+select pg_temp.as_service();
+select is(public.activate_membership('pi_am1', null, null, null, null, 10000, 'CHF'), 'activated',
+          'montant et devise conformes : activated');
+reset role;
+select is((select status::text || ' ' || coalesce(error, '-') from public.payments where id = pg_temp.pmid('am1')),
+          'succeeded -', 'conforme : succeeded, note effacée');
+select pg_temp.as_service();
+select is(public.confirm_payment('pi_course', 'card', 1000, 'chf'), 'amount_mismatch', 'cours : montant différent → amount_mismatch');
+select is(public.settle_payment_intent('pi_course', 'card', 2000, 'usd'), 'amount_mismatch',
+          'settle : devise différente → amount_mismatch');
+reset role;
+select is((select status::text from public.payments where stripe_payment_intent_id = 'pi_course'), 'failed',
+          'cours : paiement failed');
+select pg_temp.as_service();
+
+-- ---------------------------------------------------------------------------
 -- settle_payment_intent : routage par recherche de l'intent
 -- ---------------------------------------------------------------------------
 select pg_temp.smp('s3', pg_temp.k('s'), pg_temp.k('s'), 1);
@@ -290,14 +323,74 @@ select pg_temp.as_service();
 select is(public.renew_membership('sub_t', 'in_0', 100, pg_temp.today_z() + 45), 'renewed', 'facture ancienne : renewed');
 reset role;
 select is((pg_temp.m('t1')).ends_on, pg_temp.today_z() + 60, 'facture ancienne : ends_on ne recule pas');
+select pg_temp.as_service();
+select is(public.renew_membership('sub_t', 'in_bad', 50, pg_temp.today_z() + 90, 'chf'), 'amount_mismatch',
+          'renouvellement : montant différent → amount_mismatch');
+select is(public.renew_membership('sub_t', 'in_eur', 100, pg_temp.today_z() + 90, 'eur'), 'amount_mismatch',
+          'renouvellement : devise différente → amount_mismatch');
+select is(public.renew_membership('sub_t', 'in_bad', 50, pg_temp.today_z() + 90, 'chf'), 'already',
+          'renouvellement refusé rejoué : already');
+select is(public.renew_membership('sub_t', 'in_2', 100, pg_temp.today_z() + 60, 'chf', 'pi_in_2'), 'renewed',
+          'renouvellement avec l''intent de la facture');
+reset role;
+select is((pg_temp.m('t1')).ends_on, pg_temp.today_z() + 60, 'montant différent : pas de prolongation');
+select is((select status::text || ' ' || (error is not null)::text from public.payments where stripe_invoice_id = 'in_bad'),
+          'failed true', 'montant différent : paiement failed avec note');
+select is((select stripe_payment_intent_id from public.payments where stripe_invoice_id = 'in_2'), 'pi_in_2',
+          'intent de la facture gardé sur le paiement');
+select pg_temp.as_service();
+select is(public.mark_refunded_by_intent(null, 'in_1'), 'refunded', 'charge.refunded retrouvé par la facture');
+select is(public.mark_refunded_by_intent('pi_in_2', 'in_2'), 'refunded', 'charge.refunded retrouvé par l''intent');
+reset role;
+select is((select string_agg(status::text, ',' order by stripe_invoice_id) from public.payments
+            where stripe_invoice_id in ('in_1', 'in_2')), 'refunded,refunded', 'paiements d''abonnement refunded');
+select is((select row(status, ends_on)::text from pg_temp.m('t1')),
+          row('active'::public.membership_status, pg_temp.today_z() + 60)::text,
+          'paiement d''adhésion remboursé : adhésion inchangée');
+
+-- ---------------------------------------------------------------------------
+-- Chevauchements
+-- ---------------------------------------------------------------------------
+select pg_temp.as_service();
+select is(pg_temp.hint_of(format('select * from public.start_membership_payment(%L, %L, 1, %L)',
+                                 pg_temp.k('t'), pg_temp.k('t'), 'one_time')),
+          'already_covered', 'abonnement actif qui se renouvelle : paiement unique refusé');
+select is(pg_temp.hint_of(format('select * from public.start_membership_payment(%L, %L, 1, %L)',
+                                 pg_temp.k('t'), pg_temp.k('t'), 'stripe_subscription')),
+          'already_covered', 'abonnement actif qui se renouvelle : second abonnement refusé');
+select is(pg_temp.hint_of(format('select * from public.start_membership_payment(%L, %L, 1, %L)',
+                                 pg_temp.k('s'), pg_temp.k('s'), 'stripe_subscription')),
+          'already_covered', 'paiement unique couvrant plus de 7 jours : abonnement refusé');
+reset role;
+update public.profiles set paid_until = pg_temp.today_z() + 20 where id = pg_temp.k('w');
+select pg_temp.as_service();
+select is(pg_temp.hint_of(format('select * from public.start_membership_payment(%L, %L, 1, %L)',
+                                 pg_temp.k('w'), pg_temp.k('w'), 'stripe_subscription')),
+          'already_covered', '« payé pour l''année » couvrant plus de 7 jours : abonnement refusé');
+select lives_ok(format('select * from public.start_membership_payment(%L, %L, 1, %L)',
+                       pg_temp.k('w'), pg_temp.k('w'), 'one_time'),
+                'couverture de plus de 7 jours : paiement unique accepté (empilé)');
+reset role;
+update public.profiles set paid_until = pg_temp.today_z() + 5 where id = pg_temp.k('w');
+select pg_temp.as_service();
+select pg_temp.smp('w1', pg_temp.k('w'), pg_temp.k('w'), 1, 'stripe_subscription');
+select is(public.activate_membership(null, 'sub_w', pg_temp.today_z() + 31, pg_temp.mid('w1'), 'card', 10000, 'chf'),
+          'activated', 'dans les 7 derniers jours : abonnement accepté');
+reset role;
+select is((select row(starts_on, ends_on)::text from pg_temp.m('w1')),
+          row(pg_temp.today_z() + 6, pg_temp.today_z() + 31)::text, 'abonnement empilé après la couverture');
 
 -- ---------------------------------------------------------------------------
 -- set_membership_cancel / end_membership
 -- ---------------------------------------------------------------------------
 select pg_temp.as_service();
 select public.set_membership_cancel('sub_t', true);
-select public.set_membership_cancel('sub_t', true);
+select public.set_membership_cancel('sub_t', true, now());
+-- événement plus ancien que le dernier appliqué : ignoré
+select public.set_membership_cancel('sub_t', false, now() - interval '1 minute');
 reset role;
+select is((select last_stripe_update_at from public.memberships where id = pg_temp.mid('t1')), now(),
+          'last_stripe_update_at = événement appliqué');
 select is((select row(status, cancel_at_period_end, auto_renew)::text from pg_temp.m('t1')),
           row('cancelled'::public.membership_status, true, false)::text,
           'résiliation : cancelled, cancel_at_period_end, plus de renouvellement');
@@ -338,6 +431,58 @@ reset role;
 select is(pg_temp.pst(pg_temp.pmid('s3')), 'refunded', 'paiement refunded');
 select ok((select refunded_at is not null from public.payments where id = pg_temp.pmid('s3')), 'refunded_at renseigné');
 
+-- remboursement d'une réservation de cours depuis le tableau de bord : désinscrite
+with c as (
+  insert into public.courses (sport, level, location_id, starts_at, ends_at, created_by, price_non_member)
+  values ('jjb', 'adulte', (select id from public.locations where is_default),
+          now() + interval '2 days', now() + interval '2 days 90 minutes', pg_temp.k('pa'), 20)
+  returning id
+), b as (
+  insert into public.bookings (course_id, profile_id, booked_by, price, payment_status)
+  select c.id, pg_temp.k('s'), pg_temp.k('s'), 20, 'paid' from c
+  returning id
+)
+insert into public.payments (kind, payer_profile_id, beneficiary_profile_id, booking_id, amount, status,
+                             stripe_payment_intent_id, description)
+select 'course', pg_temp.k('s'), pg_temp.k('s'), b.id, 20, 'succeeded', 'pi_bk', 'Cours' from b;
+select pg_temp.as_service();
+select is(public.mark_refunded_by_intent('pi_bk'), 'refunded', 'cours remboursé depuis Stripe : refunded');
+reset role;
+select is((select payment_status || ' ' || (cancelled_at is not null)::text from public.bookings
+            where id = (select booking_id from public.payments where stripe_payment_intent_id = 'pi_bk')),
+          'refunded true', 'réservation remboursée : refunded et désinscrite');
+
+-- ---------------------------------------------------------------------------
+-- apply_stripe_event : enregistrement et action dans la même transaction
+-- ---------------------------------------------------------------------------
+select pg_temp.as_service();
+select is(public.apply_stripe_event('evt_1', 'invoice.paid', 'renew_membership',
+            jsonb_build_object('p_subscription', 'sub_t2', 'p_invoice', 'in_t2_1', 'p_amount', 250,
+                               'p_period_end', pg_temp.today_z() + 182, 'p_currency', 'chf', 'p_intent', 'pi_t2_1')),
+          'renewed', 'apply_stripe_event : action appliquée');
+select is(public.apply_stripe_event('evt_1', 'invoice.paid', 'renew_membership',
+            jsonb_build_object('p_subscription', 'sub_t2', 'p_invoice', 'in_t2_2', 'p_amount', 250,
+                               'p_period_end', pg_temp.today_z() + 273, 'p_currency', 'chf')),
+          'duplicate', 'apply_stripe_event : déjà reçu → duplicate');
+select is((select count(*)::int from public.stripe_events where id = 'evt_1'), 1, 'événement enregistré une fois');
+select is((select count(*)::int from public.payments where stripe_invoice_id in ('in_t2_1', 'in_t2_2')), 1,
+          'duplicate : sans effet');
+select throws_ok($$ select public.apply_stripe_event('evt_2', 'invoice.paid', 'renew_membership',
+                      '{"p_subscription":"sub_unknown","p_invoice":"in_u","p_amount":1,"p_period_end":"2030-01-01"}') $$,
+                 'P0002', null, 'apply_stripe_event : action en échec → erreur');
+select is((select count(*)::int from public.stripe_events where id = 'evt_2'), 0,
+          'action en échec : aucun événement enregistré (Stripe réessaiera)');
+select is(pg_temp.hint_of($$ select public.apply_stripe_event('evt_3', 'x', 'admin_update_pricing', '{}') $$),
+          'invalid_field', 'apply_stripe_event : fonction hors liste → invalid_field');
+select is((select count(*)::int from public.stripe_events where id = 'evt_3'), 0, 'fonction hors liste : rien enregistré');
+select is(public.apply_stripe_event('evt_4', 'customer.subscription.deleted', 'end_membership',
+                                    '{"p_subscription":"sub_none"}'), 'ok', 'action sans résultat : ok');
+select is(public.apply_stripe_event('evt_5', 'customer.subscription.updated', 'set_membership_cancel',
+            jsonb_build_object('p_subscription', 'sub_t2', 'p_cancel_at_period_end', true, 'p_event_at', now())),
+          'ok', 'apply_stripe_event : set_membership_cancel');
+reset role;
+select is((pg_temp.m('t2')).cancel_at_period_end, true, 'apply_stripe_event : résiliation appliquée');
+
 -- ---------------------------------------------------------------------------
 -- record_customer
 -- ---------------------------------------------------------------------------
@@ -373,11 +518,17 @@ update public.memberships set starts_on = pg_temp.today_z() - 20, ends_on = pg_t
 update public.memberships set status = 'ended' where id in (pg_temp.mid('s1'), pg_temp.mid('s3'));
 update public.memberships set starts_on = pg_temp.today_z() - 20, ends_on = pg_temp.today_z() + 7
  where id = pg_temp.mid('s2');
+-- mi : finit dans 3 jours (jamais notifié) → rappel ; w : finie hier → aucun
+insert into public.memberships (profile_id, source, months, starts_on, ends_on, status, amount)
+values (pg_temp.k('mi'), 'one_time', 1, pg_temp.today_z() - 27, pg_temp.today_z() + 3, 'active', 50),
+       (pg_temp.k('w'), 'one_time', 1, pg_temp.today_z() - 31, pg_temp.today_z() - 1, 'active', 100);
 select pg_temp.as_service();
 select public.process_course_schedule();
 reset role;
-select is((select count(*)::int from public.notification_outbox where kind = 'membership_expiring'), 2,
-          'process_course_schedule : deux rappels (enfant via parent, adulte)');
+select is((select count(*)::int from public.notification_outbox where kind = 'membership_expiring'), 3,
+          'process_course_schedule : trois rappels (enfant via parent, adulte, fin dans 3 jours)');
+select is((select payload from public.notification_outbox where kind = 'membership_expiring' and profile_id = pg_temp.k('mi')),
+          jsonb_build_object('ends_on', pg_temp.today_z() + 3), 'fin dans 3 jours, jamais notifié : rappel');
 select is((select payload from public.notification_outbox where kind = 'membership_expiring' and profile_id = pg_temp.k('pa')),
           jsonb_build_object('child_profile_id', pg_temp.k('ch'), 'ends_on', pg_temp.today_z() + 7),
           'enfant : rappel au parent, avec l''enfant et la date de fin');
@@ -386,9 +537,9 @@ select is((select payload from public.notification_outbox where kind = 'membersh
 select pg_temp.as_service();
 select public.process_course_schedule();
 reset role;
-select is((select count(*)::int from public.notification_outbox where kind = 'membership_expiring'), 2,
+select is((select count(*)::int from public.notification_outbox where kind = 'membership_expiring'), 3,
           'deuxième passage : aucune nouvelle ligne');
-select is((select count(*)::int from public.claim_outbox(10) where kind = 'membership_expiring'), 2,
+select is((select count(*)::int from public.claim_outbox(10) where kind = 'membership_expiring'), 3,
           'claim_outbox : rappels réservés (pas expirés)');
 
 -- ---------------------------------------------------------------------------
@@ -411,6 +562,8 @@ select throws_ok($$ select public.settle_payment_intent('pi_x', null) $$, '42501
                  'authenticated : settle_payment_intent refusé');
 select throws_ok($$ select public.mark_refunded_by_intent('pi_x') $$, '42501', null,
                  'authenticated : mark_refunded_by_intent refusé');
+select throws_ok($$ select public.apply_stripe_event('e', 't', 'end_membership', '{}') $$, '42501', null,
+                 'authenticated : apply_stripe_event refusé');
 select throws_ok($$ select * from public.stripe_events $$, '42501', null, 'authenticated : stripe_events illisible');
 reset role;
 set local role anon;
@@ -420,7 +573,8 @@ select is((select count(*)::int from information_schema.routine_privileges
             where routine_schema = 'public' and grantee in ('anon', 'authenticated', 'PUBLIC')
               and routine_name in ('start_membership_payment', 'activate_membership', 'renew_membership',
                                    'set_membership_cancel', 'end_membership', 'record_customer',
-                                   'settle_payment_intent', 'mark_refunded_by_intent')), 0,
+                                   'settle_payment_intent', 'mark_refunded_by_intent', 'apply_stripe_event',
+                                   'confirm_payment', 'amount_mismatch')), 0,
           'anon / authenticated : aucun droit d''exécution');
 select is((select count(*)::int from information_schema.routine_privileges
             where routine_schema = 'public' and grantee = 'anon'), 0,

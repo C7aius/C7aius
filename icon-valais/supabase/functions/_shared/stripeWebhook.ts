@@ -9,6 +9,7 @@ import { CLUB_TIME_ZONE } from './push.ts';
 export type StripeEvent = {
   id: string;
   type: string;
+  created?: number; // horodatage Unix de l'événement
   data: { object: Record<string, unknown> };
 };
 
@@ -82,6 +83,10 @@ function str(v: unknown): string | null {
 // identifiant d'un champ qui peut être un id ou un objet développé (expand)
 function idOf(v: unknown): string | null {
   return str(v) ?? str(obj(v)?.id);
+}
+
+function int(v: unknown): number | null {
+  return typeof v === 'number' && Number.isInteger(v) ? v : null;
 }
 
 function uuidOf(v: unknown): string | null {
@@ -163,16 +168,25 @@ export function routeStripeEvent(event: StripeEvent): Action {
     case 'payment_intent.succeeded': {
       const meta = obj(o.metadata) ?? {};
       const method = paymentMethodOf(o);
+      // montant et devise comparés en base au montant attendu
+      const money = { p_amount_cents: int(o.amount_received) ?? int(o.amount), p_currency: str(o.currency) };
       const membership = uuidOf(meta.membership_id);
       if (membership) {
         return {
           fn: 'activate_membership',
-          args: { p_payment_intent: id, p_subscription: null, p_period_end: null, p_membership: membership, p_method: method },
+          args: {
+            p_payment_intent: id,
+            p_subscription: null,
+            p_period_end: null,
+            p_membership: membership,
+            p_method: method,
+            ...money,
+          },
         };
       }
-      if (uuidOf(meta.booking_id)) return { fn: 'confirm_payment', args: { p_intent: id, p_method: method } };
+      if (uuidOf(meta.booking_id)) return { fn: 'confirm_payment', args: { p_intent: id, p_method: method, ...money } };
       // sans metadata (ex. facture d'abonnement) : routage par l'intent en base
-      return { fn: 'settle_payment_intent', args: { p_intent: id, p_method: method } };
+      return { fn: 'settle_payment_intent', args: { p_intent: id, p_method: method, ...money } };
     }
     case 'payment_intent.payment_failed':
       return { fn: 'fail_payment', args: { p_intent: id } };
@@ -189,6 +203,8 @@ export function routeStripeEvent(event: StripeEvent): Action {
             p_period_end: periodEnd,
             p_membership: uuidOf(sub.metadata.membership_id),
             p_method: 'card', // abonnements : carte / Apple Pay / Google Pay
+            p_amount_cents: int(o.amount_paid),
+            p_currency: str(o.currency),
           },
         };
       }
@@ -196,7 +212,14 @@ export function routeStripeEvent(event: StripeEvent): Action {
         const paid = typeof o.amount_paid === 'number' ? o.amount_paid : 0;
         return {
           fn: 'renew_membership',
-          args: { p_subscription: sub.id, p_invoice: id, p_amount: paid / 100, p_period_end: periodEnd },
+          args: {
+            p_subscription: sub.id,
+            p_invoice: id,
+            p_amount: paid / 100,
+            p_period_end: periodEnd,
+            p_currency: str(o.currency),
+            p_intent: invoicePaymentIntent(o),
+          },
         };
       }
       return IGNORE;
@@ -204,15 +227,22 @@ export function routeStripeEvent(event: StripeEvent): Action {
     case 'customer.subscription.updated':
       return {
         fn: 'set_membership_cancel',
-        args: { p_subscription: id, p_cancel_at_period_end: o.cancel_at_period_end === true || o.cancel_at != null },
+        args: {
+          p_subscription: id,
+          p_cancel_at_period_end: o.cancel_at_period_end === true || o.cancel_at != null,
+          // un événement plus ancien que le dernier appliqué est ignoré en base
+          p_event_at: int(event.created) === null ? null : new Date(event.created! * 1000).toISOString(),
+        },
       };
     case 'customer.subscription.deleted':
       return { fn: 'end_membership', args: { p_subscription: id } };
     case 'charge.refunded': {
       // remboursement total seulement (le club ne rembourse que des montants entiers)
+      // retrouvé par l'intent, à défaut par la facture (abonnement)
       const intent = idOf(o.payment_intent);
-      if (o.refunded !== true || !intent) return IGNORE;
-      return { fn: 'mark_refunded_by_intent', args: { p_intent: intent } };
+      const invoice = idOf(o.invoice);
+      if (o.refunded !== true || (!intent && !invoice)) return IGNORE;
+      return { fn: 'mark_refunded_by_intent', args: { p_intent: intent, p_invoice: invoice } };
     }
     default:
       return IGNORE;
@@ -225,12 +255,10 @@ export function routeStripeEvent(event: StripeEvent): Action {
 export type StripeWebhookDeps = {
   secret: string | undefined; // STRIPE_WEBHOOK_SECRET
   nowSec(): number;
-  // insère stripe_events ; false si l'événement était déjà enregistré
-  recordEvent(id: string, type: string): Promise<boolean>;
-  // supprime l'événement (action en échec : Stripe le renverra)
-  forgetEvent(id: string): Promise<void>;
-  // appelle la fonction SQL (rpc service_role) ; rejette en cas d'erreur
-  call(fn: string, args: Record<string, unknown>): Promise<unknown>;
+  // rpc apply_stripe_event : enregistre l'événement et applique l'action dans
+  // la même transaction ; 'duplicate' si déjà reçu ; rejette en cas d'erreur
+  // (rien n'est alors enregistré : Stripe renverra l'événement)
+  apply(id: string, type: string, fn: string, args: Record<string, unknown>): Promise<string>;
 };
 
 export type StripeWebhookResult = { status: number; body: Record<string, unknown> };
@@ -265,21 +293,18 @@ export async function handleStripeWebhook(req: Request, deps: StripeWebhookDeps)
   const action = routeStripeEvent(event);
   if ('ignore' in action) return { status: 200, body: { received: true, ignored: true } };
 
-  if (!(await deps.recordEvent(event.id, event.type))) {
+  let result: string;
+  try {
+    result = await deps.apply(event.id, event.type, action.fn, action.args);
+  } catch (e) {
+    console.error('stripe-webhook: action failed', event.type, event.id, action.fn, errMessage(e));
+    return { status: 500, body: { error: 'processing failed' } };
+  }
+  if (result === 'duplicate') {
     console.log('stripe-webhook: duplicate', event.type, event.id);
     return { status: 200, body: { received: true, duplicate: true } };
   }
-  try {
-    const result = await deps.call(action.fn, action.args);
-    console.log('stripe-webhook:', event.type, event.id, '→', action.fn, typeof result === 'string' ? result : '');
-    return { status: 200, body: { received: true, result: typeof result === 'string' ? result : null } };
-  } catch (e) {
-    console.error('stripe-webhook: action failed', event.type, event.id, action.fn, errMessage(e));
-    try {
-      await deps.forgetEvent(event.id);
-    } catch (e2) {
-      console.error('stripe-webhook: could not forget event', event.id, errMessage(e2));
-    }
-    return { status: 500, body: { error: 'processing failed' } };
-  }
+  if (result === 'amount_mismatch') console.error('stripe-webhook: amount mismatch', event.type, event.id);
+  console.log('stripe-webhook:', event.type, event.id, '→', action.fn, result);
+  return { status: 200, body: { received: true, result } };
 }

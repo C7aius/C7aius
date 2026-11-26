@@ -65,7 +65,12 @@ Deno.test('verifyStripeSignature: plusieurs v1 (rotation du secret), v0 ignoré,
 // ---------------------------------------------------------------------------
 // routeStripeEvent
 // ---------------------------------------------------------------------------
-const ev = (type: string, object: Record<string, unknown>): StripeEvent => ({ id: 'evt_x', type, data: { object } });
+const ev = (type: string, object: Record<string, unknown>, created?: number): StripeEvent => ({
+  id: 'evt_x',
+  type,
+  created,
+  data: { object },
+});
 const MID = '0b1e3c3a-1d2f-4c55-9a77-0f3c1c2b9a10';
 const BID = '7c9a1e52-3b4d-4f6e-8a9b-1c2d3e4f5a6b';
 // 26 décembre 2026 10:00 UTC (11:00 à Zurich) ; 31 décembre 2026 23:30 UTC = 1er janvier à Zurich
@@ -84,11 +89,22 @@ Deno.test('routeStripeEvent: payment_intent.succeeded adhésion (metadata.member
         id: 'pi_m',
         metadata: { payment_id: 'x', membership_id: MID },
         payment_method_types: ['twint'],
+        amount: 10000,
+        amount_received: 10000,
+        currency: 'chf',
       }),
     ),
     {
       fn: 'activate_membership',
-      args: { p_payment_intent: 'pi_m', p_subscription: null, p_period_end: null, p_membership: MID, p_method: 'twint' },
+      args: {
+        p_payment_intent: 'pi_m',
+        p_subscription: null,
+        p_period_end: null,
+        p_membership: MID,
+        p_method: 'twint',
+        p_amount_cents: 10000,
+        p_currency: 'chf',
+      },
     },
   );
 });
@@ -101,9 +117,11 @@ Deno.test('routeStripeEvent: payment_intent.succeeded cours (metadata.booking_id
         metadata: { payment_id: 'x', booking_id: BID },
         payment_method_types: ['card', 'twint'],
         payment_method: { id: 'pm_1', type: 'card' },
+        amount: 2000,
+        currency: 'chf',
       }),
     ),
-    { fn: 'confirm_payment', args: { p_intent: 'pi_c', p_method: 'card' } },
+    { fn: 'confirm_payment', args: { p_intent: 'pi_c', p_method: 'card', p_amount_cents: 2000, p_currency: 'chf' } },
   );
   // moyen lu dans la charge (anciennes versions de l'API)
   assertEquals(
@@ -115,12 +133,12 @@ Deno.test('routeStripeEvent: payment_intent.succeeded cours (metadata.booking_id
         charges: { data: [{ payment_method_details: { type: 'twint' } }] },
       }),
     ),
-    { fn: 'confirm_payment', args: { p_intent: 'pi_c', p_method: 'twint' } },
+    { fn: 'confirm_payment', args: { p_intent: 'pi_c', p_method: 'twint', p_amount_cents: null, p_currency: null } },
   );
 });
 
 Deno.test('routeStripeEvent: payment_intent.succeeded sans metadata (ou metadata invalide) → settle_payment_intent', () => {
-  const expected = { fn: 'settle_payment_intent', args: { p_intent: 'pi_s', p_method: null } };
+  const expected = { fn: 'settle_payment_intent', args: { p_intent: 'pi_s', p_method: null, p_amount_cents: null, p_currency: null } };
   assertEquals(routeStripeEvent(ev('payment_intent.succeeded', { id: 'pi_s', payment_method_types: ['card', 'twint'] })), expected);
   assertEquals(
     routeStripeEvent(ev('payment_intent.succeeded', { id: 'pi_s', metadata: { membership_id: 'not-a-uuid' } })),
@@ -141,6 +159,7 @@ const invoice = (billing_reason: string, extra: Record<string, unknown> = {}) =>
   subscription: 'sub_1',
   payment_intent: 'pi_inv',
   amount_paid: 10000,
+  currency: 'chf',
   subscription_details: { metadata: { membership_id: MID } },
   lines: { data: [{ period: { start: END - 30 * 86400, end: END } }] },
   ...extra,
@@ -155,6 +174,8 @@ Deno.test('routeStripeEvent: invoice.paid subscription_create → activate_membe
       p_period_end: '2026-12-26',
       p_membership: MID,
       p_method: 'card',
+      p_amount_cents: 10000,
+      p_currency: 'chf',
     },
   });
 });
@@ -168,14 +189,29 @@ Deno.test('routeStripeEvent: invoice.paid, format récent de l\'API (parent.subs
   });
   assertEquals(routeStripeEvent(ev('invoice.paid', obj)), {
     fn: 'activate_membership',
-    args: { p_payment_intent: null, p_subscription: 'sub_2', p_period_end: '2026-12-26', p_membership: MID, p_method: 'card' },
+    args: {
+      p_payment_intent: null,
+      p_subscription: 'sub_2',
+      p_period_end: '2026-12-26',
+      p_membership: MID,
+      p_method: 'card',
+      p_amount_cents: 10000,
+      p_currency: 'chf',
+    },
   });
 });
 
 Deno.test('routeStripeEvent: invoice.paid subscription_cycle → renew_membership (montant en CHF)', () => {
   assertEquals(routeStripeEvent(ev('invoice.paid', invoice('subscription_cycle', { amount_paid: 12550 }))), {
     fn: 'renew_membership',
-    args: { p_subscription: 'sub_1', p_invoice: 'in_1', p_amount: 125.5, p_period_end: '2026-12-26' },
+    args: {
+      p_subscription: 'sub_1',
+      p_invoice: 'in_1',
+      p_amount: 125.5,
+      p_period_end: '2026-12-26',
+      p_currency: 'chf',
+      p_intent: 'pi_inv',
+    },
   });
   // plusieurs lignes : la fin de période la plus tardive
   const lines = { data: [{ period: { end: END - 86400 } }, { period: { end: NEW_YEAR } }] };
@@ -192,19 +228,19 @@ Deno.test('routeStripeEvent: invoice.paid autre motif, ou hors abonnement → ig
   assertEquals(routeStripeEvent(ev('invoice.paid', invoice('subscription_cycle', { subscription: null }))), { ignore: true });
 });
 
-Deno.test('routeStripeEvent: customer.subscription.updated → set_membership_cancel', () => {
-  assertEquals(routeStripeEvent(ev('customer.subscription.updated', { id: 'sub_1', cancel_at_period_end: true })), {
+Deno.test('routeStripeEvent: customer.subscription.updated → set_membership_cancel (avec la date de l\'événement)', () => {
+  assertEquals(routeStripeEvent(ev('customer.subscription.updated', { id: 'sub_1', cancel_at_period_end: true }, END)), {
     fn: 'set_membership_cancel',
-    args: { p_subscription: 'sub_1', p_cancel_at_period_end: true },
+    args: { p_subscription: 'sub_1', p_cancel_at_period_end: true, p_event_at: '2026-12-26T10:00:00.000Z' },
   });
   assertEquals(routeStripeEvent(ev('customer.subscription.updated', { id: 'sub_1', cancel_at_period_end: false, cancel_at: null })), {
     fn: 'set_membership_cancel',
-    args: { p_subscription: 'sub_1', p_cancel_at_period_end: false },
+    args: { p_subscription: 'sub_1', p_cancel_at_period_end: false, p_event_at: null },
   });
   // résiliation programmée par cancel_at (versions récentes de l'API)
   assertEquals(routeStripeEvent(ev('customer.subscription.updated', { id: 'sub_1', cancel_at_period_end: false, cancel_at: END })), {
     fn: 'set_membership_cancel',
-    args: { p_subscription: 'sub_1', p_cancel_at_period_end: true },
+    args: { p_subscription: 'sub_1', p_cancel_at_period_end: true, p_event_at: null },
   });
 });
 
@@ -215,10 +251,18 @@ Deno.test('routeStripeEvent: customer.subscription.deleted → end_membership', 
   });
 });
 
-Deno.test('routeStripeEvent: charge.refunded total → mark_refunded_by_intent ; partiel → ignore', () => {
+Deno.test('routeStripeEvent: charge.refunded total → mark_refunded_by_intent (intent et facture) ; partiel → ignore', () => {
   assertEquals(routeStripeEvent(ev('charge.refunded', { id: 'ch_1', payment_intent: 'pi_r', refunded: true })), {
     fn: 'mark_refunded_by_intent',
-    args: { p_intent: 'pi_r' },
+    args: { p_intent: 'pi_r', p_invoice: null },
+  });
+  assertEquals(routeStripeEvent(ev('charge.refunded', { id: 'ch_1', payment_intent: 'pi_r', invoice: 'in_9', refunded: true })), {
+    fn: 'mark_refunded_by_intent',
+    args: { p_intent: 'pi_r', p_invoice: 'in_9' },
+  });
+  assertEquals(routeStripeEvent(ev('charge.refunded', { id: 'ch_1', payment_intent: null, invoice: 'in_9', refunded: true })), {
+    fn: 'mark_refunded_by_intent',
+    args: { p_intent: null, p_invoice: 'in_9' },
   });
   assertEquals(routeStripeEvent(ev('charge.refunded', { id: 'ch_1', payment_intent: 'pi_r', refunded: false })), { ignore: true });
   assertEquals(routeStripeEvent(ev('charge.refunded', { id: 'ch_1', payment_intent: null, refunded: true })), { ignore: true });
@@ -234,28 +278,21 @@ Deno.test('routeStripeEvent: type inconnu ou objet sans id → ignore', () => {
 // ---------------------------------------------------------------------------
 // handleStripeWebhook (I/O simulées)
 // ---------------------------------------------------------------------------
-type Calls = { recorded: string[]; forgotten: string[]; calls: { fn: string; args: Record<string, unknown> }[] };
+type Calls = { applied: { id: string; type: string; fn: string; args: Record<string, unknown> }[] };
 
+// apply_stripe_event simulée : événement et action dans la même « transaction »
 function deps(over: Partial<StripeWebhookDeps> = {}, seen: string[] = []): { deps: StripeWebhookDeps; log: Calls } {
-  const log: Calls = { recorded: [], forgotten: [], calls: [] };
+  const log: Calls = { applied: [] };
   const known = new Set(seen);
   return {
     log,
     deps: {
       secret: SECRET,
       nowSec: () => NOW,
-      async recordEvent(id) {
-        log.recorded.push(id);
-        if (known.has(id)) return false;
+      async apply(id, type, fn, args) {
+        if (known.has(id)) return 'duplicate';
         known.add(id);
-        return true;
-      },
-      async forgetEvent(id) {
-        log.forgotten.push(id);
-        known.delete(id);
-      },
-      async call(fn, args) {
-        log.calls.push({ fn, args });
+        log.applied.push({ id, type, fn, args });
         return 'confirmed';
       },
       ...over,
@@ -280,8 +317,7 @@ Deno.test('handleStripeWebhook: signature invalide ou absente → 400, rien enre
     const { deps: d, log } = deps();
     const res = await handleStripeWebhook(await post(SUCCEEDED, header), d);
     assertEquals(res.status, 400, String(header));
-    assertEquals(log.recorded, []);
-    assertEquals(log.calls, []);
+    assertEquals(log.applied, []);
   }
 });
 
@@ -290,8 +326,14 @@ Deno.test('handleStripeWebhook: action routée appelée, événement enregistré
   const res = await handleStripeWebhook(await post(SUCCEEDED, await sign(SUCCEEDED)), d);
   assertEquals(res.status, 200);
   assertEquals(res.body, { received: true, result: 'confirmed' });
-  assertEquals(log.recorded, ['evt_ok']);
-  assertEquals(log.calls, [{ fn: 'confirm_payment', args: { p_intent: 'pi_c', p_method: 'card' } }]);
+  assertEquals(log.applied, [
+    {
+      id: 'evt_ok',
+      type: 'payment_intent.succeeded',
+      fn: 'confirm_payment',
+      args: { p_intent: 'pi_c', p_method: 'card', p_amount_cents: null, p_currency: null },
+    },
+  ]);
 });
 
 Deno.test('handleStripeWebhook: événement déjà reçu → 200 sans effet', async () => {
@@ -299,7 +341,7 @@ Deno.test('handleStripeWebhook: événement déjà reçu → 200 sans effet', as
   const res = await handleStripeWebhook(await post(SUCCEEDED, await sign(SUCCEEDED)), d);
   assertEquals(res.status, 200);
   assertEquals(res.body, { received: true, duplicate: true });
-  assertEquals(log.calls, []);
+  assertEquals(log.applied, []);
 });
 
 Deno.test('handleStripeWebhook: même événement livré deux fois → une seule action', async () => {
@@ -308,7 +350,8 @@ Deno.test('handleStripeWebhook: même événement livré deux fois → une seule
   await handleStripeWebhook(await post(SUCCEEDED, header), d);
   const res = await handleStripeWebhook(await post(SUCCEEDED, header), d);
   assertEquals(res.status, 200);
-  assertEquals(log.calls.length, 1);
+  assertEquals(res.body, { received: true, duplicate: true });
+  assertEquals(log.applied.length, 1);
 });
 
 Deno.test('handleStripeWebhook: type ignoré → 200, ni enregistrement ni action', async () => {
@@ -317,18 +360,22 @@ Deno.test('handleStripeWebhook: type ignoré → 200, ni enregistrement ni actio
   const res = await handleStripeWebhook(await post(body, await sign(body)), d);
   assertEquals(res.status, 200);
   assertEquals(res.body, { received: true, ignored: true });
-  assertEquals(log.recorded, []);
-  assertEquals(log.calls, []);
+  assertEquals(log.applied, []);
 });
 
-Deno.test('handleStripeWebhook: action en échec → 500 et événement oublié (Stripe réessaiera)', async () => {
-  const { deps: d, log } = deps({
-    call: () => Promise.reject(new Error('confirm_payment: payment not found')),
-  });
-  const res = await handleStripeWebhook(await post(SUCCEEDED, await sign(SUCCEEDED)), d);
+Deno.test('handleStripeWebhook: action en échec → 500 (rien enregistré : Stripe réessaiera, puis appliqué)', async () => {
+  let fail = true;
+  const { deps: d, log } = deps();
+  const apply = d.apply;
+  d.apply = (id, type, fn, args) => (fail ? Promise.reject(new Error('confirm_payment: payment not found')) : apply(id, type, fn, args));
+  const header = await sign(SUCCEEDED);
+  const res = await handleStripeWebhook(await post(SUCCEEDED, header), d);
   assertEquals(res.status, 500);
-  assertEquals(log.forgotten, ['evt_ok']);
   assertFalse(JSON.stringify(res.body).includes('payment not found'));
+  fail = false;
+  const retry = await handleStripeWebhook(await post(SUCCEEDED, header), d);
+  assertEquals(retry.status, 200);
+  assertEquals(log.applied.length, 1);
 });
 
 Deno.test('handleStripeWebhook: secret absent → 500 ; GET → 405 ; JSON invalide signé → 400', async () => {
@@ -358,7 +405,7 @@ Deno.test('handleStripeWebhook: ne journalise ni le secret, ni la signature, ni 
     const header = await sign(body);
     const { deps: ok } = deps();
     await handleStripeWebhook(await post(body, header), ok);
-    const { deps: failing } = deps({ call: () => Promise.reject(new Error('boom')) });
+    const { deps: failing } = deps({ apply: () => Promise.reject(new Error('boom')) });
     await handleStripeWebhook(await post(body, header), failing);
     await handleStripeWebhook(await post(body, 't=1,v1=00'), ok);
     const all = lines.join('\n');
