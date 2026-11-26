@@ -15,6 +15,12 @@ let mockFocusCb: (() => void) | null = null;
 let mockSelectError: { code?: string } | null = null;
 let mockParams: { id?: string } = {};
 let mockRows: Record<string, unknown>[] = [];
+const mockSideQuery = () => {
+  const q: Record<string, unknown> = {};
+  for (const m of ['select', 'eq', 'or', 'order', 'limit']) q[m] = () => q;
+  q.then = (res: (v: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(res);
+  return q;
+};
 
 const year = new Date().getFullYear();
 const base = {
@@ -39,7 +45,7 @@ jest.mock('expo-router', () => ({
 jest.mock('@/src/lib/supabase', () => ({
   supabase: {
     rpc: (...a: unknown[]) => mockRpc(...a),
-    from: () => ({
+    from: (table: string) => table !== 'profiles' ? mockSideQuery() : ({
       update: (patch: unknown) => ({ eq: (...a: unknown[]) => mockUpdate(patch, ...a) }),
       select: () => ({
         order: async () => ({ data: mockRows, error: mockSelectError }),
@@ -83,6 +89,34 @@ describe('account list', () => {
     await waitFor(() => expect(screen.getByText('Chloe Test')).toBeTruthy());
     await fireEvent.press(screen.getByText('Lieux'));
     expect(mockPush).toHaveBeenCalledWith('/admin/locations');
+  });
+
+  it('shows membership and trial badges from admin_member_overview', async () => {
+    mockRpc.mockImplementation(async (name: string) =>
+      name === 'admin_member_overview'
+        ? {
+            data: [
+              { profile_id: 'p2', member_until: '2027-03-31', trial_used: 0 },
+              { profile_id: 'e1', member_until: null, trial_used: 3 },
+            ],
+            error: null,
+          }
+        : { data: null, error: null },
+    );
+    await render(<AdminList />);
+    expect(await screen.findByText("Adhérent jusqu'au 31.03.2027")).toBeTruthy();
+    expect(screen.getByText('Non-adhérent - Essais 3/10')).toBeTruthy();
+  });
+
+  it('links to pricing, student proofs and payments', async () => {
+    await render(<AdminList />);
+    await waitFor(() => expect(screen.getByText('Chloe Test')).toBeTruthy());
+    await fireEvent.press(screen.getByText('Tarifs'));
+    await fireEvent.press(screen.getByText('Justificatifs étudiants'));
+    await fireEvent.press(screen.getByText('Paiements'));
+    expect(mockPush).toHaveBeenCalledWith('/admin/pricing');
+    expect(mockPush).toHaveBeenCalledWith('/admin/students');
+    expect(mockPush).toHaveBeenCalledWith('/admin/payments');
   });
 
   it('lists everyone, then only pending profs with the pending filter', async () => {

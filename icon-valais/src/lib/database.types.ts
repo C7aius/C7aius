@@ -991,6 +991,10 @@ export type Database = {
         };
         Returns: string;
       };
+      admin_member_overview: {
+        Args: never;
+        Returns: { profile_id: string; member_until: string | null; trial_used: number }[];
+      };
       admin_decide_student: { Args: { p_proof: string; p_valid: boolean }; Returns: undefined };
       admin_mark_paid_current_year: { Args: { p_profile: string }; Returns: undefined };
       admin_set_prof_status: {

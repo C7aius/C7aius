@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth, type Profile } from '@/src/auth/AuthProvider';
 import { AccountDetail } from '@/src/components/admin/AccountDetail';
 import { Chip, ErrorText, Field } from '@/src/components/ui';
+import { formatDate } from '@/src/domain/adminErrors';
 import { supabase } from '@/src/lib/supabase';
 import { colors } from '@/src/theme';
 
@@ -19,6 +20,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 const ROLE_KEY = { eleve: 'admin.roleEleve', prof: 'admin.roleProf', admin: 'admin.roleAdmin' } as const;
 const WIDE = 900;
+const TRIAL_LIMIT = 10;
 
 export default function Admin() {
   const { t } = useTranslation();
@@ -31,6 +33,7 @@ export default function Admin() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [selected, setSelected] = useState<string | null>(null);
+  const [overview, setOverview] = useState<Record<string, { until: string | null; trials: number }>>({});
   const isAdmin = profile?.role === 'admin';
 
   const load = useCallback(async () => {
@@ -43,6 +46,17 @@ export default function Admin() {
       }
     } catch {
       setError('errors.network');
+    }
+    // badges d'adhésion / essais : un seul appel ; en cas d'échec la liste s'affiche sans badge
+    try {
+      const { data } = await supabase.rpc('admin_member_overview');
+      const map: Record<string, { until: string | null; trials: number }> = {};
+      for (const o of (Array.isArray(data) ? data : []) as { profile_id: string; member_until: string | null; trial_used: number }[]) {
+        map[o.profile_id] = { until: o.member_until, trials: o.trial_used };
+      }
+      setOverview(map);
+    } catch {
+      setOverview({});
     }
   }, []);
 
@@ -79,9 +93,20 @@ export default function Admin() {
   const list = (
     <View>
       <Text style={styles.title}>{t('admin.title')}</Text>
-      <Pressable accessibilityRole="link" onPress={() => router.push('/admin/locations')}>
-        <Text style={styles.link}>{t('admin.locations')}</Text>
-      </Pressable>
+      <View style={styles.links}>
+        <Pressable accessibilityRole="link" onPress={() => router.push('/admin/locations')}>
+          <Text style={styles.link}>{t('admin.locations')}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="link" onPress={() => router.push('/admin/pricing')}>
+          <Text style={styles.link}>{t('admin.pricingLink')}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="link" onPress={() => router.push('/admin/students')}>
+          <Text style={styles.link}>{t('admin.studentsLink')}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="link" onPress={() => router.push('/admin/payments')}>
+          <Text style={styles.link}>{t('admin.paymentsLink')}</Text>
+        </Pressable>
+      </View>
       <Field label={t('common.search')} value={query} onChangeText={setQuery} />
       <View style={styles.chips}>
         {FILTERS.map((f) => (
@@ -102,6 +127,13 @@ export default function Admin() {
             {t(ROLE_KEY[r.role])}
             {r.role === 'prof' && r.prof_status === 'en_attente' ? ` - ${t('admin.pending')}` : ''}
           </Text>
+          {overview[r.id] ? (
+            <Text style={styles.itemMeta}>
+              {overview[r.id].until
+                ? t('admin.paidUntil', { date: formatDate(overview[r.id].until as string) })
+                : `${t('admin.nonMember')} - ${t('admin.trials', { used: overview[r.id].trials, limit: TRIAL_LIMIT })}`}
+            </Text>
+          ) : null}
         </Pressable>
       ))}
     </View>
@@ -131,6 +163,7 @@ const styles = StyleSheet.create({
   wideCol: { width: 380, borderRightWidth: 1, borderRightColor: colors.grey },
   wideDetail: { flex: 1 },
   title: { color: colors.orange, fontSize: 24, fontWeight: '700', marginBottom: 12 },
+  links: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 },
   link: { color: colors.orange, textDecorationLine: 'underline', marginBottom: 12, fontSize: 16 },
   body: { color: colors.white, marginBottom: 8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 },

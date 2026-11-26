@@ -6,6 +6,8 @@ import { useAuth, type Profile } from '@/src/auth/AuthProvider';
 import { BeltEditor } from '@/src/components/BeltEditor';
 import { Button, Chip, ErrorText, Field } from '@/src/components/ui';
 import { formatDate, rpcErrorKey } from '@/src/domain/adminErrors';
+import { PaymentItem } from '@/src/components/payments/PaymentItem';
+import { formatAmount, type PaymentRow } from '@/src/domain/paymentsView';
 import { canEditBelt } from '@/src/domain/roles';
 import type { Role } from '@/src/domain/types';
 import { supabase } from '@/src/lib/supabase';
@@ -14,6 +16,14 @@ import { colors } from '@/src/theme';
 const ROLES: Role[] = ['eleve', 'prof', 'admin'];
 const ROLE_KEY: Record<Role, string> = { eleve: 'admin.roleEleve', prof: 'admin.roleProf', admin: 'admin.roleAdmin' };
 const STATUS_KEY = { en_attente: 'admin.statusEnAttente', valide: 'admin.statusValide', refuse: 'admin.statusRefuse' } as const;
+
+type MembershipRow = { id: string; status: 'pending' | 'active' | 'cancelled' | 'ended'; starts_on: string | null; ends_on: string | null; amount: number };
+const MEMBERSHIP_STATUS_KEY = {
+  pending: 'admin.membershipPending',
+  active: 'admin.membershipActive',
+  cancelled: 'admin.membershipCancelled',
+  ended: 'admin.membershipEnded',
+} as const;
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const EMAIL_RE = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/;
@@ -30,6 +40,25 @@ export function AccountDetail({ id, onChanged }: { id: string; onChanged?: () =>
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [memberships, setMemberships] = useState<MembershipRow[]>([]);
+  const [payments, setPayments] = useState<PaymentRow[]>([]);
+
+  // adhésions et paiements du membre : secondaires, un échec n'empêche pas la fiche
+  const loadExtras = useCallback(async () => {
+    try {
+      const m = await supabase.from('memberships').select('*').eq('profile_id', id).order('created_at', { ascending: false });
+      setMemberships((m.data ?? []) as MembershipRow[]);
+      const p = await supabase
+        .from('payments')
+        .select('*')
+        .or(`payer_profile_id.eq.${id},beneficiary_profile_id.eq.${id}`)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      setPayments((p.data ?? []) as PaymentRow[]);
+    } catch {
+      // ignoré
+    }
+  }, [id]);
 
   const load = useCallback(async () => {
     const { data, error: e } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
@@ -55,11 +84,14 @@ export function AccountDetail({ id, onChanged }: { id: string; onChanged?: () =>
     setParentEmailError(null);
     setParentEmailSaved(false);
     let live = true;
+    setMemberships([]);
+    setPayments([]);
     void load().catch(() => live && setError('errors.network'));
+    void loadExtras();
     return () => {
       live = false;
     };
-  }, [load]);
+  }, [load, loadExtras]);
 
   const run = async (call: () => PromiseLike<{ error: { code?: string; hint?: string | null } | null }>): Promise<boolean> => {
     setBusy(true);
@@ -71,6 +103,7 @@ export function AccountDetail({ id, onChanged }: { id: string; onChanged?: () =>
         return false;
       }
       await load();
+      void loadExtras();
       onChanged?.();
       return true;
     } catch {
@@ -177,6 +210,19 @@ export function AccountDetail({ id, onChanged }: { id: string; onChanged?: () =>
         onPress={() => void run(() => supabase.rpc('admin_mark_paid_current_year', { p_profile: profile.id }))}
       />
 
+      {memberships.length === 0 ? (
+        <Text style={styles.meta}>{t('admin.membershipNone')}</Text>
+      ) : (
+        memberships.map((m) => (
+          <Text key={m.id} style={styles.meta}>
+            {`${m.starts_on && m.ends_on ? `${formatDate(m.starts_on)} - ${formatDate(m.ends_on)}` : t('admin.membershipPending')} - ${t(MEMBERSHIP_STATUS_KEY[m.status])} - ${formatAmount(Number(m.amount))}`}
+          </Text>
+        ))
+      )}
+
+      <Text style={styles.section}>{t('admin.memberPayments')}</Text>
+      {payments.length === 0 ? <Text style={styles.meta}>{t('payments.mineNone')}</Text> : payments.map((p) => <PaymentItem key={p.id} payment={p} />)}
+
       {profile.auth_user_id !== null && profile.parent_profile_id === null ? (
         <View>
           <Text style={styles.section}>{t('admin.parentEmail')}</Text>
@@ -219,5 +265,6 @@ const styles = StyleSheet.create({
   title: { color: colors.orange, fontSize: 22, fontWeight: '700', marginBottom: 4 },
   section: { color: colors.orange, fontWeight: '700', marginTop: 20, marginBottom: 6 },
   body: { color: colors.white, marginBottom: 8 },
+  meta: { color: colors.grey, fontSize: 13, marginBottom: 4 },
   row: { flexDirection: 'row', flexWrap: 'wrap' },
 });

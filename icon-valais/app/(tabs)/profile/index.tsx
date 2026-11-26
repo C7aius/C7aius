@@ -71,6 +71,7 @@ export default function ProfileHome() {
 
       <Button title={t('profile.edit')} onPress={() => router.push('/profile/edit')} />
       <Button title={t('subscription.link')} variant="secondary" onPress={() => router.push('/profile/membership')} />
+      <Button title={t('payments.mineLink')} variant="secondary" onPress={() => router.push('/profile/payments')} />
       <Button title={t('studentProof.link')} variant="secondary" onPress={() => router.push('/profile/student-proof')} />
       {profile.age >= 18 ? <Button title={t('profile.children')} variant="secondary" onPress={() => router.push('/profile/children')} /> : null}
       <Button title={t('auth.logout')} variant="secondary" onPress={() => void signOut()} />
