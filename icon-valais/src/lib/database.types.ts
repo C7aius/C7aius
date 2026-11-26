@@ -328,6 +328,84 @@ export type Database = {
         };
         Relationships: [];
       };
+      memberships: {
+        Row: {
+          amount: number;
+          auto_renew: boolean;
+          cancel_at_period_end: boolean;
+          created_at: string;
+          ends_on: string | null;
+          id: string;
+          months: number;
+          paid_by: string | null;
+          profile_id: string;
+          source: Database["public"]["Enums"]["membership_source"];
+          starts_on: string | null;
+          status: Database["public"]["Enums"]["membership_status"];
+          stripe_subscription_id: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          amount: number;
+          auto_renew?: boolean;
+          cancel_at_period_end?: boolean;
+          created_at?: string;
+          ends_on?: string | null;
+          id?: string;
+          months: number;
+          paid_by?: string | null;
+          profile_id: string;
+          source: Database["public"]["Enums"]["membership_source"];
+          starts_on?: string | null;
+          status?: Database["public"]["Enums"]["membership_status"];
+          stripe_subscription_id?: string | null;
+        };
+        Update: {
+          amount?: number;
+          auto_renew?: boolean;
+          cancel_at_period_end?: boolean;
+          created_at?: string;
+          ends_on?: string | null;
+          id?: string;
+          months?: number;
+          paid_by?: string | null;
+          profile_id?: string;
+          source?: Database["public"]["Enums"]["membership_source"];
+          starts_on?: string | null;
+          status?: Database["public"]["Enums"]["membership_status"];
+          stripe_subscription_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "memberships_paid_by_fkey";
+            columns: ["paid_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "memberships_paid_by_fkey";
+            columns: ["paid_by"];
+            isOneToOne: false;
+            referencedRelation: "public_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "memberships_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "memberships_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "public_profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       notification_outbox: {
         Row: {
           attempts: number;
@@ -437,6 +515,46 @@ export type Database = {
           },
         ];
       };
+      pricing_settings: {
+        Row: {
+          child_discount_pct: number;
+          child_max_age: number;
+          default_course_price: number;
+          id: boolean;
+          price_12m: number;
+          price_1m: number;
+          price_3m: number;
+          price_6m: number;
+          student_discount_pct: number;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          child_discount_pct?: number;
+          child_max_age?: number;
+          default_course_price?: number;
+          id?: boolean;
+          price_12m: number;
+          price_1m: number;
+          price_3m: number;
+          price_6m: number;
+          student_discount_pct?: number;
+          updated_at?: string;
+        };
+        Update: {
+          child_discount_pct?: number;
+          child_max_age?: number;
+          default_course_price?: number;
+          id?: boolean;
+          price_12m?: number;
+          price_1m?: number;
+          price_3m?: number;
+          price_6m?: number;
+          student_discount_pct?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           age: number;
@@ -460,6 +578,7 @@ export type Database = {
           prof_status: Database["public"]["Enums"]["prof_status"] | null;
           role: Database["public"]["Enums"]["user_role"];
           sports: Database["public"]["Enums"]["sport"][];
+          stripe_customer_id: string | null;
           student_status: Database["public"]["Enums"]["student_status"];
           training_places: string | null;
           years_grappling: number | null;
@@ -489,6 +608,7 @@ export type Database = {
           prof_status?: Database["public"]["Enums"]["prof_status"] | null;
           role?: Database["public"]["Enums"]["user_role"];
           sports: Database["public"]["Enums"]["sport"][];
+          stripe_customer_id?: string | null;
           student_status?: Database["public"]["Enums"]["student_status"];
           training_places?: string | null;
           years_grappling?: number | null;
@@ -516,6 +636,7 @@ export type Database = {
           prof_status?: Database["public"]["Enums"]["prof_status"] | null;
           role?: Database["public"]["Enums"]["user_role"];
           sports?: Database["public"]["Enums"]["sport"][];
+          stripe_customer_id?: string | null;
           student_status?: Database["public"]["Enums"]["student_status"];
           training_places?: string | null;
           years_grappling?: number | null;
@@ -632,9 +753,11 @@ export type Database = {
         Args: { p_profile: string; p_role: Database["public"]["Enums"]["user_role"] };
         Returns: undefined;
       };
+      admin_update_pricing: { Args: { p: Json }; Returns: undefined };
       admin_upsert_location: { Args: { p: Json }; Returns: string };
       assign_prof: { Args: { p_course: string; p_prof: string }; Returns: undefined };
       book_course: { Args: { p_course: string; p_profile?: string }; Returns: string };
+      can_pay_for: { Args: { p_profile: string }; Returns: boolean };
       cancel_course: { Args: { p_course: string; p_scope: string }; Returns: number };
       check_parent_consent: { Args: { p_token: string }; Returns: boolean };
       claim_outbox: {
@@ -681,8 +804,28 @@ export type Database = {
       is_active_prof: { Args: Record<PropertyKey, never>; Returns: boolean };
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
       is_course_staff: { Args: { p_course: string }; Returns: boolean };
+      is_member: { Args: { p_on?: string; p_profile: string }; Returns: boolean };
       is_self_or_child: { Args: { p_profile: string }; Returns: boolean };
       leave_slot: { Args: { p_course: string }; Returns: undefined };
+      membership_price: {
+        Args: { p_months: number; p_profile: string };
+        Returns: {
+          amount: number;
+          base: number;
+          discount_pct: number;
+          reason: string;
+        }[];
+      };
+      my_membership: {
+        Args: { p_profile?: string };
+        Returns: {
+          auto_renew: boolean;
+          cancel_at_period_end: boolean;
+          is_member: boolean;
+          source: Database["public"]["Enums"]["membership_source"];
+          until: string;
+        }[];
+      };
       notify_profile: { Args: { p_course: string; p_kind: string; p_profile: string }; Returns: undefined };
       process_course_schedule: { Args: Record<PropertyKey, never>; Returns: undefined };
       register_push_token: { Args: { p_platform: string; p_token: string }; Returns: undefined };
@@ -699,6 +842,8 @@ export type Database = {
       course_level: "adulte" | "enfant";
       course_status: "prevu" | "open_mat" | "annule";
       lang: "fr" | "de" | "en" | "ru";
+      membership_source: "stripe_subscription" | "one_time" | "admin_year";
+      membership_status: "pending" | "active" | "cancelled" | "ended";
       prof_status: "en_attente" | "valide" | "refuse";
       sport: "jjb" | "grappling" | "mma";
       student_status: "aucun" | "en_attente" | "valide" | "refuse";
@@ -820,6 +965,8 @@ export const Constants = {
       course_level: ["adulte", "enfant"],
       course_status: ["prevu", "open_mat", "annule"],
       lang: ["fr", "de", "en", "ru"],
+      membership_source: ["stripe_subscription", "one_time", "admin_year"],
+      membership_status: ["pending", "active", "cancelled", "ended"],
       prof_status: ["en_attente", "valide", "refuse"],
       sport: ["jjb", "grappling", "mma"],
       student_status: ["aucun", "en_attente", "valide", "refuse"],
