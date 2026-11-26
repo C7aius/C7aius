@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import type { Profile } from '@/src/auth/AuthProvider';
 import { PaySheet } from '@/src/components/payments/PaySheet';
 import { Button, Chip } from '@/src/components/ui';
-import { payBookingDetail } from '@/src/lib/payments';
 import { zurichTimeKey } from '@/src/domain/courses';
 import { colors } from '@/src/theme';
 import type { CourseRow } from '@/src/domain/courses';
@@ -67,15 +66,12 @@ export function BookButton({
   };
 
   const pending = booked ? course.myPending?.[target] : undefined;
-  const payPending = async () => {
+  // reprise du paiement : même confirmation (montant, mention de remboursement) qu'à la réservation
+  const payPending = () => {
     if (!pending) return;
-    setBusy(true);
     onError(null);
-    const { outcome, errorKey } = await payBookingDetail(pending.bookingId);
-    setBusy(false);
-    if (outcome === 'error') return onError(errorKey ?? 'payments.error');
-    if (outcome === 'redirected') return;
-    closePay(outcome);
+    setNotice(null);
+    setPay({ bookingId: pending.bookingId, amount: pending.amount });
   };
 
   const info = payInfo?.[target];
@@ -96,7 +92,7 @@ export function BookButton({
       {pending ? (
         <Text style={styles.trial}>{t('payments.pendingUntil', { time: zurichTimeKey(pending.until) })}</Text>
       ) : null}
-      {pending ? <Button title={t('payments.pay')} disabled={busy} onPress={() => void payPending()} /> : null}
+      {pending ? <Button title={t('payments.pay')} disabled={busy} onPress={payPending} /> : null}
       <Button
         title={booked ? t('courses.unbook') : t('courses.book')}
         variant={booked ? 'secondary' : 'primary'}

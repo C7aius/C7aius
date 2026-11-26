@@ -197,7 +197,9 @@
     "membershipActive": "Aktiv",
     "membershipCancelled": "Gekündigt",
     "membershipPending": "Ausstehend",
-    "membershipEnded": "Beendet"
+    "membershipEnded": "Beendet",
+    "refundsFailedTitle": "Fehlgeschlagene Rückerstattungen ({{count}})",
+    "refundsFailedHint": "Stripe konnte diese Zahlungen nicht erstatten: Erstatten Sie sie im Stripe-Dashboard."
   },
   "tabs": {
     "home": "Start",
@@ -256,7 +258,8 @@
     "defaultRequired": "Ein Standardort ist erforderlich.",
     "invalidProf": "Dieser Trainer ist für diesen Kurs nicht gültig.",
     "missingField": "Ein Pflichtfeld fehlt.",
-    "repeatBeforeStart": "Das Enddatum liegt vor dem ersten Kurs."
+    "repeatBeforeStart": "Das Enddatum liegt vor dem ersten Kurs.",
+    "liveSubscription": "Kündigen Sie zuerst das laufende Abonnement dieses Profils."
   },
   "pending": {
     "profTitle": "Konto wartet auf Freigabe",
@@ -378,13 +381,13 @@
     "holdNotice": "Ihr Platz ist 15 Minuten reserviert.",
     "error": "Die Zahlung ist fehlgeschlagen, bitte erneut versuchen.",
     "conflict": "Für diese Buchung läuft bereits eine Zahlung.",
-    "alreadyCovered": "Diese Buchung muss nicht bezahlt werden.",
+    "alreadyCovered": "Sie sind bereits durch ein laufendes Abonnement gedeckt.",
     "notConfigured": "Die Zahlung ist noch nicht verfügbar.",
     "providerError": "Der Zahlungsdienst ist nicht erreichbar, bitte erneut versuchen.",
     "resultTitleSuccess": "Zahlung erhalten",
     "resultSuccess": "Danke! Ihre Zahlung wird bestätigt.",
     "resultTitleCancel": "Zahlung abgebrochen",
-    "resultCancel": "Es wurde nichts abgebucht. Ihr Platz bleibt 15 Minuten reserviert: Sie können im Kursplan bezahlen.",
+    "resultCancel": "Es wurde nichts belastet.",
     "resultInvalid": "Unbekannte Zahlungsrückkehr.",
     "backHome": "Zurück zu den Kursen",
     "pendingUntil": "Zahlung ausstehend — Platz reserviert bis {{time}}",
@@ -398,7 +401,12 @@
     "statusSucceeded": "Bezahlt",
     "statusFailed": "Fehlgeschlagen",
     "receiptUnavailable": "Diese Quittung ist nicht verfügbar.",
-    "receiptError": "Die Quittung konnte nicht heruntergeladen werden, versuchen Sie es erneut."
+    "receiptError": "Die Quittung konnte nicht heruntergeladen werden, versuchen Sie es erneut.",
+    "alreadyPaid": "Dieser Kurs ist bereits bezahlt.",
+    "expired": "Die Zahlungsfrist ist abgelaufen oder der Kurs ist nicht mehr offen. Bitte erneut buchen.",
+    "resultCancelCourse": "Es wurde nichts abgebucht. Ihr Platz bleibt 15 Minuten reserviert: Sie können im Kursplan bezahlen.",
+    "resultCancelMembership": "Es wurde nichts belastet und Ihre Mitgliedschaft wurde nicht aktiviert. Sie können es in Ihrem Profil erneut versuchen.",
+    "refundFailed": "Rückerstattung wird vom Club bearbeitet"
   },
   "subscription": {
     "title": "Mein Abonnement",

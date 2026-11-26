@@ -42,6 +42,8 @@ export function rpcErrorKey(error: { code?: string; hint?: string | null } | nul
       return 'errors.missingField';
     case 'repeat_before_start':
       return 'errors.repeatBeforeStart';
+    case 'live_subscription':
+      return 'errors.liveSubscription';
   }
   switch (error?.code) {
     case '42501':

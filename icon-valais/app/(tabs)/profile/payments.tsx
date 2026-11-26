@@ -6,13 +6,13 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { PaymentItem } from '@/src/components/payments/PaymentItem';
 import { Button, ErrorText } from '@/src/components/ui';
-import type { PaymentRow } from '@/src/domain/paymentsView';
+import { isMemberVisible, MEMBER_HIDDEN_STATUSES, type PaymentRow } from '@/src/domain/paymentsView';
 import { openReceipt } from '@/src/lib/receipt';
 import { ReceiptError } from '@/src/lib/receiptFetch';
 import { supabase } from '@/src/lib/supabase';
 import { colors } from '@/src/theme';
 
-/** Mes paiements (les miens et ceux faits pour mes enfants), avec quittance PDF. */
+/** Mes paiements (les miens et ceux faits pour mes enfants), avec quittance PDF ; ni en attente ni échoués. */
 export default function Payments() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -29,11 +29,13 @@ export default function Payments() {
         .from('payments')
         .select('*')
         .or(`payer_profile_id.eq.${me},beneficiary_profile_id.eq.${me}`)
+        // en attente / échoués : rien d'encaissé, masqués (l'admin les voit)
+        .not('status', 'in', `(${MEMBER_HIDDEN_STATUSES.join(',')})`)
         .order('created_at', { ascending: false })
         .limit(200);
       if (e) setError('errors.generic');
       else {
-        setRows((data ?? []) as PaymentRow[]);
+        setRows(((data ?? []) as PaymentRow[]).filter(isMemberVisible));
         setError(null);
       }
     } catch {

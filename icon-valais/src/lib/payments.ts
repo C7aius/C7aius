@@ -37,7 +37,14 @@ export function paymentErrorKey(code: unknown): string {
     case 'payment_conflict':
       return 'payments.conflict';
     case 'already_covered':
+      // adhésion : un abonnement en cours couvre déjà le profil
       return 'payments.alreadyCovered';
+    case 'already_paid':
+      return 'payments.alreadyPaid';
+    case 'not_pending':
+    case 'course_closed':
+      // délai de 15 min dépassé, ou cours annulé / commencé
+      return 'payments.expired';
     case 'not_configured':
       return 'payments.notConfigured';
     case 'payment_provider_error':

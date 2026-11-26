@@ -109,7 +109,7 @@ describe('Membership screen', () => {
     await waitFor(() => expect(screen.getByText('40.00 CHF')).toBeTruthy());
     await fireEvent.press(screen.getByText('40.00 CHF'));
     await fireEvent.press(screen.getByText('Payer 40.00 CHF'));
-    await waitFor(() => expect(screen.getByText("Cette réservation n'a pas besoin de paiement.")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Vous êtes déjà couvert par un abonnement en cours.")).toBeTruthy());
   });
 
   it('shows member status and asks confirmation before cancelling', async () => {

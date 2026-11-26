@@ -197,7 +197,9 @@
     "membershipActive": "Active",
     "membershipCancelled": "Résiliée",
     "membershipPending": "En attente",
-    "membershipEnded": "Terminée"
+    "membershipEnded": "Terminée",
+    "refundsFailedTitle": "Remboursements échoués ({{count}})",
+    "refundsFailedHint": "Stripe n'a pas pu rembourser ces paiements : remboursez-les depuis le tableau de bord Stripe."
   },
   "tabs": {
     "home": "Accueil",
@@ -256,7 +258,8 @@
     "defaultRequired": "Un lieu par défaut est obligatoire.",
     "invalidProf": "Ce prof n'est pas valide pour ce cours.",
     "missingField": "Un champ obligatoire est manquant.",
-    "repeatBeforeStart": "La date de fin est avant le premier cours."
+    "repeatBeforeStart": "La date de fin est avant le premier cours.",
+    "liveSubscription": "Résiliez d'abord l'abonnement en cours de ce profil."
   },
   "pending": {
     "profTitle": "Compte en attente de validation",
@@ -378,13 +381,13 @@
     "holdNotice": "Votre place est réservée 15 minutes.",
     "error": "Le paiement a échoué, réessayez.",
     "conflict": "Un paiement est déjà en cours pour cette réservation.",
-    "alreadyCovered": "Cette réservation n'a pas besoin de paiement.",
+    "alreadyCovered": "Vous êtes déjà couvert par un abonnement en cours.",
     "notConfigured": "Le paiement n'est pas encore disponible.",
     "providerError": "Le service de paiement est indisponible, réessayez.",
     "resultTitleSuccess": "Paiement reçu",
     "resultSuccess": "Merci ! Votre paiement est en cours de confirmation.",
     "resultTitleCancel": "Paiement annulé",
-    "resultCancel": "Aucun montant n'a été débité. Votre place reste retenue 15 minutes : vous pouvez payer depuis le planning.",
+    "resultCancel": "Aucun montant n'a été débité.",
     "resultInvalid": "Retour de paiement inconnu.",
     "backHome": "Retour aux cours",
     "pendingUntil": "Paiement en attente — place retenue jusqu'à {{time}}",
@@ -398,7 +401,12 @@
     "statusSucceeded": "Payé",
     "statusFailed": "Échoué",
     "receiptUnavailable": "Cette quittance n'est pas disponible.",
-    "receiptError": "Impossible de télécharger la quittance, réessayez."
+    "receiptError": "Impossible de télécharger la quittance, réessayez.",
+    "alreadyPaid": "Ce cours est déjà payé.",
+    "expired": "Le délai de paiement est dépassé ou le cours n'est plus ouvert. Réservez à nouveau.",
+    "resultCancelCourse": "Aucun montant n'a été débité. Votre place reste retenue 15 minutes : vous pouvez payer depuis le planning.",
+    "resultCancelMembership": "Aucun montant n'a été débité et votre adhésion n'a pas été activée. Vous pouvez réessayer depuis votre profil.",
+    "refundFailed": "Remboursement à traiter par le club"
   },
   "subscription": {
     "title": "Mon abonnement",

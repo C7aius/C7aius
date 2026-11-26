@@ -6,6 +6,7 @@ import Payments from '../payments';
 let mockRows: unknown[] = [];
 const mockShare = jest.fn();
 const mockFetch = jest.fn();
+const mockNot = jest.fn();
 
 jest.mock('@/src/auth/AuthProvider', () => ({
   useAuth: () => ({ profile: { id: 'me', role: 'eleve' }, ready: true }),
@@ -22,6 +23,10 @@ jest.mock('@/src/lib/supabase', () => ({
     from: () => {
       const q: Record<string, unknown> = {};
       for (const m of ['select', 'order', 'or', 'limit']) q[m] = () => q;
+      q.not = (...a: unknown[]) => {
+        mockNot(...a);
+        return q;
+      };
       q.then = (res: (v: unknown) => unknown) => Promise.resolve({ data: mockRows, error: null }).then(res);
       return q;
     },
@@ -78,4 +83,20 @@ it('shows an error when the receipt is not receiptable', async () => {
   expect(await screen.findByText("Cette quittance n'est pas disponible.")).toBeTruthy();
   expect(mockShare).not.toHaveBeenCalled();
   await act(async () => new Promise((r) => setTimeout(r, 10)));
+});
+
+it('hides pending and failed payments from members (nothing was charged)', async () => {
+  mockRows = [
+    pay({}),
+    pay({ id: 'p3', status: 'pending', description: 'Checkout abandonné' }),
+    pay({ id: 'p4', status: 'failed', description: 'Carte refusée' }),
+    pay({ id: 'p5', status: 'refund_failed', description: 'Remboursement refusé' }),
+  ];
+  await render(<Payments />);
+  expect(await screen.findByText('Cours JJB')).toBeTruthy();
+  expect(mockNot).toHaveBeenCalledWith('status', 'in', '(pending,failed)');
+  expect(screen.queryByText('Checkout abandonné')).toBeNull();
+  expect(screen.queryByText('Carte refusée')).toBeNull();
+  expect(screen.getByText('Remboursement refusé')).toBeTruthy();
+  expect(screen.getByText('Remboursement à traiter par le club')).toBeTruthy();
 });

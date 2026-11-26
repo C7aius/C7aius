@@ -13,7 +13,7 @@ export type CourseRow = CourseRowDb & {
   /** ids des profils (soi et enfants) inscrits à ce cours */
   myBookings: string[];
   /** réservations en attente de paiement, par profil (id de réservation et fin de la retenue) */
-  myPending: Record<string, { bookingId: string; until: string }>;
+  myPending: Record<string, { bookingId: string; until: string; amount: number }>;
 };
 
 export type CourseLabel = 'annule' | 'open_mat' | 'vacant' | 'prevu';

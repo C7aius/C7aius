@@ -23,10 +23,25 @@ it('success: says the payment awaits confirmation', async () => {
   expect(mockReplace).toHaveBeenCalledWith('/');
 });
 
-it('cancel: nothing charged', async () => {
+it('cancel: nothing charged (generic text without kind)', async () => {
   mockParams = { status: 'cancel', payment: 'p1' };
   await render(<PaymentResult />);
   expect(screen.getByText('Paiement annulé')).toBeTruthy();
+  expect(screen.getByText("Aucun montant n'a été débité.")).toBeTruthy();
+});
+
+it('cancel of a course Checkout: spot still held 15 minutes', async () => {
+  mockParams = { status: 'cancel', payment: 'p1', kind: 'course' };
+  await render(<PaymentResult />);
+  expect(screen.getByText(/place reste retenue 15 minutes/)).toBeTruthy();
+  expect(screen.queryByText(/adhésion/)).toBeNull();
+});
+
+it('cancel of a membership Checkout: no spot, membership not activated', async () => {
+  mockParams = { status: 'cancel', payment: 'p1', kind: 'membership' };
+  await render(<PaymentResult />);
+  expect(screen.getByText(/adhésion n'a pas été activée/)).toBeTruthy();
+  expect(screen.queryByText(/place/)).toBeNull();
 });
 
 it('unknown status', async () => {

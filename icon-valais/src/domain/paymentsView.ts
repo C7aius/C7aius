@@ -3,7 +3,7 @@ export type PaymentRow = {
   receipt_no: number;
   kind: string;
   amount: number;
-  status: 'pending' | 'succeeded' | 'failed' | 'refund_pending' | 'refunded';
+  status: 'pending' | 'succeeded' | 'failed' | 'refund_pending' | 'refunded' | 'refund_failed';
   description: string;
   method: string | null;
   paid_at: string | null;
@@ -18,7 +18,18 @@ export const STATUS_KEY: Record<PaymentRow['status'], string> = {
   failed: 'payments.statusFailed',
   refund_pending: 'payments.refundPending',
   refunded: 'payments.refunded',
+  refund_failed: 'payments.refundFailed',
 };
+
+/**
+ * « Mes paiements » : paiements en attente (Checkout abandonné, feuille fermée) et échoués
+ * masqués aux membres — rien n'a été encaissé. L'admin voit tout.
+ */
+export const MEMBER_HIDDEN_STATUSES: PaymentRow['status'][] = ['pending', 'failed'];
+export const isMemberVisible = (p: Pick<PaymentRow, 'status'>) => !MEMBER_HIDDEN_STATUSES.includes(p.status);
+
+/** Remboursements que Stripe n'a pas pu faire (8 essais, ou refusés) : à traiter par l'admin. */
+export const failedRefunds = <T extends Pick<PaymentRow, 'status'>>(rows: T[]) => rows.filter((r) => r.status === 'refund_failed');
 
 /** Une quittance n'existe que pour un paiement abouti (ou remboursé). */
 export const isReceiptable = (p: Pick<PaymentRow, 'status'>) => p.status === 'succeeded' || p.status === 'refunded';

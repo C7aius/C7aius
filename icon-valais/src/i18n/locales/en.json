@@ -197,7 +197,9 @@
     "membershipActive": "Active",
     "membershipCancelled": "Cancelled",
     "membershipPending": "Pending",
-    "membershipEnded": "Ended"
+    "membershipEnded": "Ended",
+    "refundsFailedTitle": "Failed refunds ({{count}})",
+    "refundsFailedHint": "Stripe could not refund these payments: refund them from the Stripe dashboard."
   },
   "tabs": {
     "home": "Home",
@@ -256,7 +258,8 @@
     "defaultRequired": "A default location is required.",
     "invalidProf": "This coach is not valid for this class.",
     "missingField": "A required field is missing.",
-    "repeatBeforeStart": "The end date is before the first class."
+    "repeatBeforeStart": "The end date is before the first class.",
+    "liveSubscription": "Cancel this profile's current subscription first."
   },
   "pending": {
     "profTitle": "Account awaiting approval",
@@ -378,13 +381,13 @@
     "holdNotice": "Your spot is held for 15 minutes.",
     "error": "The payment failed, please try again.",
     "conflict": "A payment is already in progress for this booking.",
-    "alreadyCovered": "This booking does not need a payment.",
+    "alreadyCovered": "You are already covered by a current membership.",
     "notConfigured": "Payment is not available yet.",
     "providerError": "The payment service is unavailable, please try again.",
     "resultTitleSuccess": "Payment received",
     "resultSuccess": "Thank you! Your payment is awaiting confirmation.",
     "resultTitleCancel": "Payment cancelled",
-    "resultCancel": "Nothing was charged. Your spot stays held for 15 minutes: you can pay from the schedule.",
+    "resultCancel": "Nothing was charged.",
     "resultInvalid": "Unknown payment return.",
     "backHome": "Back to classes",
     "pendingUntil": "Payment pending — spot held until {{time}}",
@@ -398,7 +401,12 @@
     "statusSucceeded": "Paid",
     "statusFailed": "Failed",
     "receiptUnavailable": "This receipt is not available.",
-    "receiptError": "Could not download the receipt, try again."
+    "receiptError": "Could not download the receipt, try again.",
+    "alreadyPaid": "This class is already paid.",
+    "expired": "The payment window has expired or the class is no longer open. Please book again.",
+    "resultCancelCourse": "Nothing was charged. Your spot stays held for 15 minutes: you can pay from the schedule.",
+    "resultCancelMembership": "Nothing was charged and your membership was not activated. You can try again from your profile.",
+    "refundFailed": "Refund to be handled by the club"
   },
   "subscription": {
     "title": "My membership",

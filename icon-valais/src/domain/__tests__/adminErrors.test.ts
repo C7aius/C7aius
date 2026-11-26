@@ -13,6 +13,9 @@ describe('rpcErrorKey', () => {
     expect(rpcErrorKey({ hint: 'missing_field' })).toBe('errors.missingField');
     expect(rpcErrorKey({ hint: 'repeat_before_start' })).toBe('errors.repeatBeforeStart');
   });
+  it('maps live_subscription (child profile with a live Stripe subscription)', () => {
+    expect(rpcErrorKey({ code: '42501', hint: 'live_subscription' })).toBe('errors.liveSubscription');
+  });
   it('falls back to SQLSTATE codes', () => {
     expect(rpcErrorKey({ code: '42501', hint: null })).toBe('errors.notAllowed');
     expect(rpcErrorKey({ code: 'P0002' })).toBe('errors.notFound');

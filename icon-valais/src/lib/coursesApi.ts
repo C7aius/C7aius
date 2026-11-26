@@ -41,7 +41,7 @@ async function assemble(courses: RawCourse[], profileIds?: string[]): Promise<Co
   // réservations actives : non annulées, et pas en attente de paiement expirée
   let myQuery = supabase
     .from('bookings')
-    .select('id,course_id,profile_id,payment_status,pending_until')
+    .select('id,course_id,profile_id,payment_status,pending_until,price')
     .in('course_id', courseIds)
     .is('cancelled_at', null)
     .or(`payment_status.neq.pending,pending_until.gt."${new Date().toISOString()}"`);
@@ -68,11 +68,11 @@ async function assemble(courses: RawCourse[], profileIds?: string[]): Promise<Co
   }
   const mineById = new Map<string, string[]>();
   const pendingById = new Map<string, CourseRow['myPending']>();
-  type MineRow = { id: string; course_id: string; profile_id: string; payment_status: string; pending_until: string | null };
+  type MineRow = { id: string; course_id: string; profile_id: string; payment_status: string; pending_until: string | null; price?: number | string | null };
   for (const b of (mine.data ?? []) as MineRow[]) {
     mineById.set(b.course_id, [...(mineById.get(b.course_id) ?? []), b.profile_id]);
     if (b.payment_status === 'pending' && b.pending_until) {
-      pendingById.set(b.course_id, { ...(pendingById.get(b.course_id) ?? {}), [b.profile_id]: { bookingId: b.id, until: b.pending_until } });
+      pendingById.set(b.course_id, { ...(pendingById.get(b.course_id) ?? {}), [b.profile_id]: { bookingId: b.id, until: b.pending_until, amount: Number(b.price ?? 0) } });
     }
   }
 

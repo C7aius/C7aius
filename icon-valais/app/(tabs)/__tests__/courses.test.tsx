@@ -279,17 +279,24 @@ describe('payment', () => {
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
-  it('a pending booking shows the hold line and a Payer button that pays that booking', async () => {
+  it('a pending booking shows the hold line and a Payer button that opens the pay sheet, then pays that booking', async () => {
     rpcWith({ used: 10, trial_limit: 10 }, false, []);
     const until = new Date(Date.now() + 10 * 60 * 1000);
     mockTables.bookings = [
-      { id: 'bp1', course_id: 'c1', profile_id: 'me', payment_status: 'pending', pending_until: until.toISOString() },
+      { id: 'bp1', course_id: 'c1', profile_id: 'me', payment_status: 'pending', pending_until: until.toISOString(), price: '25.00' },
     ];
     await render(<Courses />);
     const hhmm = new Intl.DateTimeFormat('fr-CH', { timeZone: 'Europe/Zurich', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(until);
     expect(await screen.findByText(`Paiement en attente — place retenue jusqu'à ${hhmm}`)).toBeTruthy();
     expect(screen.getByText('Se désinscrire')).toBeTruthy();
     await fireEvent.press(screen.getByText('Payer'));
+    // confirmation d'abord : montant et mention de remboursement, aucun paiement lancé
+    expect(await screen.findByText('Confirmer la réservation')).toBeTruthy();
+    expect(screen.getByText('25.00 CHF')).toBeTruthy();
+    expect(screen.getByText('Remboursé uniquement si le cours est annulé par le professeur.')).toBeTruthy();
+    expect(mockInvoke).not.toHaveBeenCalled();
+    const payButtons = screen.getAllByText('Payer');
+    await fireEvent.press(payButtons[payButtons.length - 1]);
     await waitFor(() =>
       expect(mockInvoke).toHaveBeenCalledWith('create-payment', {
         body: { kind: 'course', bookingId: 'bp1', platform: 'native' },

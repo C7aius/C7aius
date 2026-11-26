@@ -26,7 +26,8 @@ jest.mock('@stripe/stripe-react-native', () => ({
   presentPaymentSheet: (...a: unknown[]) => mockPresent(...a),
 }));
 
-import { payBooking, payMembership } from '../payments';
+import { payBooking, payMembership, paymentErrorKey } from '../payments';
+import fr from '@/src/i18n/locales/fr.json';
 
 const native = {
   paymentIntentClientSecret: 'pi_secret',
@@ -150,5 +151,21 @@ describe('payMembership', () => {
   it('cancelled', async () => {
     mockPresent.mockResolvedValue({ error: { code: 'Canceled' } });
     expect(await payMembership('p1', 1, 'card')).toBe('cancelled');
+  });
+});
+
+describe('paymentErrorKey', () => {
+  it('maps create-payment errors to specific messages', () => {
+    expect(paymentErrorKey('already_covered')).toBe('payments.alreadyCovered');
+    expect(paymentErrorKey('already_paid')).toBe('payments.alreadyPaid');
+    expect(paymentErrorKey('not_pending')).toBe('payments.expired');
+    expect(paymentErrorKey('course_closed')).toBe('payments.expired');
+    expect(paymentErrorKey('payment_conflict')).toBe('payments.conflict');
+    expect(paymentErrorKey('weird')).toBe('payments.error');
+  });
+  it('uses wording that fits each case', () => {
+    expect(fr.payments.alreadyCovered).toBe('Vous êtes déjà couvert par un abonnement en cours.');
+    expect(fr.payments.alreadyPaid).toBe('Ce cours est déjà payé.');
+    expect(fr.payments.expired).toBe("Le délai de paiement est dépassé ou le cours n'est plus ouvert. Réservez à nouveau.");
   });
 });

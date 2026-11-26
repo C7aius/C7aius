@@ -6,21 +6,32 @@ import { Button } from '@/src/components/ui';
 import { colors } from '@/src/theme';
 
 /**
- * Retour web de Stripe Checkout : /payment-result?status=success|cancel&payment=<id>.
+ * Retour web de Stripe Checkout : /payment-result?status=success|cancel&payment=<id>&kind=course|membership.
  * Le paiement n'est jamais « confirmé » ici : seul le webhook le fait, l'écran l'indique.
+ * Annulation : texte propre au cours (place retenue 15 min) ou à l'adhésion (rien d'activé) ;
+ * sans `kind` (lien ancien), texte générique.
  */
+export function resultTextKey(status: string | undefined, kind: string | undefined): string | null {
+  if (status === 'success') return 'payments.resultSuccess';
+  if (status !== 'cancel') return null;
+  if (kind === 'course') return 'payments.resultCancelCourse';
+  if (kind === 'membership') return 'payments.resultCancelMembership';
+  return 'payments.resultCancel';
+}
+
 export default function PaymentResult() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { status } = useLocalSearchParams<{ status?: string }>();
+  const { status, kind: paymentKind } = useLocalSearchParams<{ status?: string; kind?: string }>();
   const kind = status === 'success' ? 'Success' : status === 'cancel' ? 'Cancel' : null;
+  const textKey = resultTextKey(status, paymentKind);
 
   return (
     <View style={styles.screen}>
-      {kind ? (
+      {kind && textKey ? (
         <>
           <Text style={styles.title}>{t(`payments.resultTitle${kind}`)}</Text>
-          <Text style={styles.text}>{t(`payments.result${kind}`)}</Text>
+          <Text style={styles.text}>{t(textKey)}</Text>
         </>
       ) : (
         <Text style={styles.text}>{t('payments.resultInvalid')}</Text>
