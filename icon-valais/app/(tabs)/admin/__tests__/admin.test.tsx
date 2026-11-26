@@ -330,3 +330,76 @@ describe('BeltEditor', () => {
     expect(onSaved).not.toHaveBeenCalled();
   });
 });
+
+describe('members: dashboard link, filters, stats', () => {
+  const stats = () =>
+    mockRpc.mockImplementation(async (name: string) => {
+      if (name === 'admin_member_overview')
+        return {
+          data: [
+            { profile_id: 'p2', member_until: '2027-03-31', trial_used: 0 },
+            { profile_id: 'e1', member_until: null, trial_used: 3 },
+            { profile_id: 'e2', member_until: '2027-01-15', trial_used: 0 },
+          ],
+          error: null,
+        };
+      if (name === 'admin_member_segments')
+        return {
+          data: [
+            { profile_id: 'e1', visits_total: 2, visits_90d: 2, segment: 'essai', last_visit: '2026-11-02' },
+            { profile_id: 'e2', visits_total: 40, visits_90d: 20, segment: 'regulier', last_visit: '2026-11-20' },
+            { profile_id: 'p2', visits_total: 30, visits_90d: 15, segment: 'regulier', last_visit: '2026-11-18' },
+          ],
+          error: null,
+        };
+      return { data: null, error: null };
+    });
+
+  it('links to the dashboard', async () => {
+    await render(<AdminList />);
+    await waitFor(() => expect(screen.getByText('Chloe Test')).toBeTruthy());
+    await fireEvent.press(screen.getByText('Tableau de bord'));
+    expect(mockPush).toHaveBeenCalledWith('/admin/dashboard');
+  });
+
+  it('shows visits and last visit (Zurich date) per row', async () => {
+    mockRows.push(prof('e2', 'Dan', null, 'eleve'));
+    stats();
+    await render(<AdminList />);
+    expect(await screen.findByText('40 venues - Dernière venue : 20.11.2026')).toBeTruthy();
+    expect(screen.getByText('2 venues - Dernière venue : 02.11.2026')).toBeTruthy();
+  });
+
+  it('hides the trial badge for profs and admins', async () => {
+    mockRows.push(prof('a2', 'Eve', null, 'admin'));
+    mockRpc.mockImplementation(async (name: string) =>
+      name === 'admin_member_overview'
+        ? { data: [{ profile_id: 'a2', member_until: null, trial_used: 0 }, { profile_id: 'e1', member_until: null, trial_used: 3 }], error: null }
+        : { data: [], error: null },
+    );
+    await render(<AdminList />);
+    expect(await screen.findByText('Non-adhérent - Essais 3/10')).toBeTruthy();
+    expect(screen.queryByText('Non-adhérent - Essais 0/10')).toBeNull();
+    expect(screen.getAllByText('Non-adhérent').length).toBe(1);
+  });
+
+  it('combines the regular segment with the member status', async () => {
+    mockRows.push(prof('e2', 'Dan', null, 'eleve'));
+    stats();
+    await render(<AdminList />);
+    await screen.findAllByText('Dernière venue', { exact: false });
+    await press('Régulier');
+    expect(screen.getByText('Dan Test')).toBeTruthy();
+    expect(screen.getByText('Bruno Test')).toBeTruthy();
+    expect(screen.queryByText('Chloe Test')).toBeNull();
+    await press('Non-adhérents');
+    expect(screen.queryByText('Dan Test')).toBeNull();
+    expect(screen.queryByText('Bruno Test')).toBeNull();
+    await press('Non-adhérents'); // toggles off
+    await press('Adhérents');
+    expect(screen.getByText('Dan Test')).toBeTruthy();
+    await press('Essai');
+    expect(screen.queryByText('Dan Test')).toBeNull();
+    expect(screen.queryByText('Chloe Test')).toBeNull(); // essai but non-member
+  });
+});

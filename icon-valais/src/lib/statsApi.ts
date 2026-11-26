@@ -18,3 +18,28 @@ export async function fetchMyRanking(period: RankPeriod): Promise<MyRanking> {
   if (error) throw error;
   return data?.[0] ?? { rank: null, sessions: 0 };
 }
+
+export type TeachingHoursRow = Database['public']['Functions']['admin_teaching_hours']['Returns'][number];
+export type MemberHoursRow = Database['public']['Functions']['admin_member_hours']['Returns'][number];
+export type MemberSegmentRow = Database['public']['Functions']['admin_member_segments']['Returns'][number];
+export type Segment = MemberSegmentRow['segment'];
+
+/** Heures d'enseignement par prof (admin), bornes `YYYY-MM-DD` incluses (Zurich). */
+export async function fetchTeachingHours(from: string, to: string): Promise<TeachingHoursRow[]> {
+  const { data, error } = await supabase.rpc('admin_teaching_hours', { p_from: from, p_to: to });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** Heures de présence par membre (admin), triées par heures décroissantes. */
+export async function fetchMemberHours(from: string, to: string): Promise<MemberHoursRow[]> {
+  const { data, error } = await supabase.rpc('admin_member_hours', { p_from: from, p_to: to });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function fetchMemberSegments(): Promise<MemberSegmentRow[]> {
+  const { data, error } = await supabase.rpc('admin_member_segments');
+  if (error) throw error;
+  return data ?? [];
+}

@@ -7,6 +7,7 @@ import { useAuth, type Profile } from '@/src/auth/AuthProvider';
 import { AccountDetail } from '@/src/components/admin/AccountDetail';
 import { Chip, ErrorText, Field } from '@/src/components/ui';
 import { formatDate } from '@/src/domain/adminErrors';
+import { fetchMemberSegments, type MemberSegmentRow, type Segment } from '@/src/lib/statsApi';
 import { supabase } from '@/src/lib/supabase';
 import { colors } from '@/src/theme';
 
@@ -17,6 +18,17 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'eleve', label: 'admin.filterEleve' },
   { key: 'prof', label: 'admin.filterProf' },
   { key: 'admin', label: 'admin.filterAdmin' },
+];
+type Membership = 'member' | 'non';
+const MEMBERSHIPS: { key: Membership; label: string }[] = [
+  { key: 'member', label: 'admin.filterMember' },
+  { key: 'non', label: 'admin.filterNonMember' },
+];
+const SEGMENTS: { key: Segment; label: string }[] = [
+  { key: 'jamais', label: 'admin.segJamais' },
+  { key: 'essai', label: 'admin.segEssai' },
+  { key: 'occasionnel', label: 'admin.segOccasionnel' },
+  { key: 'regulier', label: 'admin.segRegulier' },
 ];
 const ROLE_KEY = { eleve: 'admin.roleEleve', prof: 'admin.roleProf', admin: 'admin.roleAdmin' } as const;
 const WIDE = 900;
@@ -32,6 +44,9 @@ export default function Admin() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
+  const [membership, setMembership] = useState<Membership | null>(null);
+  const [segment, setSegment] = useState<Segment | null>(null);
+  const [stats, setStats] = useState<Record<string, MemberSegmentRow>>({});
   const [selected, setSelected] = useState<string | null>(null);
   const [overview, setOverview] = useState<Record<string, { until: string | null; trials: number }>>({});
   const isAdmin = profile?.role === 'admin';
@@ -58,6 +73,14 @@ export default function Admin() {
     } catch {
       setOverview({});
     }
+    // venues / dernière venue / segment : idem, la liste reste utilisable sans
+    try {
+      const map: Record<string, MemberSegmentRow> = {};
+      for (const r of await fetchMemberSegments()) map[r.profile_id] = r;
+      setStats(map);
+    } catch {
+      setStats({});
+    }
   }, []);
 
   // recharge à chaque retour sur l'écran (ex. après une action dans la fiche)
@@ -72,10 +95,15 @@ export default function Admin() {
     return rows.filter((r) => {
       if (filter === 'pending' && !(r.role === 'prof' && r.prof_status === 'en_attente')) return false;
       if ((filter === 'eleve' || filter === 'prof' || filter === 'admin') && r.role !== filter) return false;
+      if (membership) {
+        const isMember = !!overview[r.id]?.until;
+        if ((membership === 'member') !== isMember) return false;
+      }
+      if (segment && stats[r.id]?.segment !== segment) return false;
       if (!q) return true;
       return `${r.first_name} ${r.last_name} ${r.email ?? ''}`.toLowerCase().includes(q);
     });
-  }, [rows, query, filter]);
+  }, [rows, query, filter, membership, segment, overview, stats]);
 
   if (!isAdmin) {
     return (
@@ -94,6 +122,9 @@ export default function Admin() {
     <View>
       <Text style={styles.title}>{t('admin.title')}</Text>
       <View style={styles.links}>
+        <Pressable accessibilityRole="link" onPress={() => router.push('/admin/dashboard')}>
+          <Text style={styles.link}>{t('admin.dashboardLink')}</Text>
+        </Pressable>
         <Pressable accessibilityRole="link" onPress={() => router.push('/admin/locations')}>
           <Text style={styles.link}>{t('admin.locations')}</Text>
         </Pressable>
@@ -111,6 +142,16 @@ export default function Admin() {
       <View style={styles.chips}>
         {FILTERS.map((f) => (
           <Chip key={f.key} label={t(f.label)} selected={filter === f.key} onPress={() => setFilter(f.key)} />
+        ))}
+      </View>
+      <View style={styles.chips}>
+        {MEMBERSHIPS.map((m) => (
+          <Chip key={m.key} label={t(m.label)} selected={membership === m.key} onPress={() => setMembership(membership === m.key ? null : m.key)} />
+        ))}
+      </View>
+      <View style={styles.chips}>
+        {SEGMENTS.map((g) => (
+          <Chip key={g.key} label={t(g.label)} selected={segment === g.key} onPress={() => setSegment(segment === g.key ? null : g.key)} />
         ))}
       </View>
       <ErrorText>{error ? t(error) : null}</ErrorText>
@@ -131,7 +172,16 @@ export default function Admin() {
             <Text style={styles.itemMeta}>
               {overview[r.id].until
                 ? t('admin.paidUntil', { date: formatDate(overview[r.id].until as string) })
-                : `${t('admin.nonMember')} - ${t('admin.trials', { used: overview[r.id].trials, limit: TRIAL_LIMIT })}`}
+                : r.role === 'eleve'
+                  ? `${t('admin.nonMember')} - ${t('admin.trials', { used: overview[r.id].trials, limit: TRIAL_LIMIT })}`
+                  : t('admin.nonMember')}
+            </Text>
+          ) : null}
+          {stats[r.id] ? (
+            <Text style={styles.itemMeta}>
+              {`${t('admin.visits', { count: stats[r.id].visits_total })} - ${
+                stats[r.id].last_visit ? t('admin.lastVisit', { date: formatDate(stats[r.id].last_visit as string) }) : t('admin.lastVisitNone')
+              }`}
             </Text>
           ) : null}
         </Pressable>

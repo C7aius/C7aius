@@ -1,3 +1,6 @@
+import { zurichToday } from '@/src/domain/courses';
+import { periodRange, zurichStartOfDay } from '@/src/domain/periods';
+
 export type PaymentRow = {
   id: string;
   receipt_no: number;
@@ -49,15 +52,14 @@ export function paymentTotals(rows: Pick<PaymentRow, 'amount' | 'status'>[]) {
 
 export type Period = 'month' | '30d' | 'year' | 'all';
 
-/** Début ISO de la période (null = tout), calculé en UTC depuis `now`. */
+/** Début ISO de la période (null = tout) : minuit à Zurich du premier jour (mois, année) ; 30 jours glissants. */
 export function periodStart(period: Period, now: Date = new Date()): string | null {
   switch (period) {
     case 'month':
-      return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+    case 'year':
+      return zurichStartOfDay(periodRange(period, zurichToday(now)).from);
     case '30d':
       return new Date(now.getTime() - 30 * 86400000).toISOString();
-    case 'year':
-      return new Date(Date.UTC(now.getUTCFullYear(), 0, 1)).toISOString();
     default:
       return null;
   }

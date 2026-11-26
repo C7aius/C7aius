@@ -56,7 +56,7 @@ function zurichParts(date: Date): Parts {
 }
 
 /** Instant UTC correspondant à une heure murale de Zurich. */
-function zurichToUtc(y: number, m: number, d: number, h = 0, mi = 0): Date {
+export function zurichToUtc(y: number, m: number, d: number, h = 0, mi = 0): Date {
   const wall = Date.UTC(y, m - 1, d, h, mi);
   let guess = wall;
   for (let i = 0; i < 3; i++) {
