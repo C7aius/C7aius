@@ -469,7 +469,9 @@
 
   "functions": {
     // Lien ouvert depuis l'e-mail du parent : pas de JWT. Le jeton uuid est le secret.
-    "confirm-parent-consent": { "verify_jwt": false }
+    "confirm-parent-consent": { "verify_jwt": false },
+    // Webhook Stripe : pas de JWT. La signature Stripe-Signature est vérifiée.
+    "stripe-webhook": { "verify_jwt": false }
   },
 
   "analytics": {

@@ -347,6 +347,7 @@ export type Database = {
           cancel_at_period_end: boolean;
           created_at: string;
           ends_on: string | null;
+          expiry_notified_at: string | null;
           id: string;
           months: number;
           paid_by: string | null;
@@ -363,6 +364,7 @@ export type Database = {
           cancel_at_period_end?: boolean;
           created_at?: string;
           ends_on?: string | null;
+          expiry_notified_at?: string | null;
           id?: string;
           months: number;
           paid_by?: string | null;
@@ -378,6 +380,7 @@ export type Database = {
           cancel_at_period_end?: boolean;
           created_at?: string;
           ends_on?: string | null;
+          expiry_notified_at?: string | null;
           id?: string;
           months?: number;
           paid_by?: string | null;
@@ -812,6 +815,25 @@ export type Database = {
           },
         ];
       };
+      stripe_events: {
+        Row: {
+          id: string;
+          received_at: string;
+          type: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          id: string;
+          received_at?: string;
+          type: string;
+        };
+        Update: {
+          id?: string;
+          received_at?: string;
+          type?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       course_booking_counts: {
@@ -860,6 +882,16 @@ export type Database = {
       };
     };
     Functions: {
+      activate_membership: {
+        Args: {
+          p_membership?: string;
+          p_method?: string;
+          p_payment_intent: string;
+          p_period_end?: string;
+          p_subscription?: string;
+        };
+        Returns: string;
+      };
       admin_mark_paid_current_year: { Args: { p_profile: string }; Returns: undefined };
       admin_set_prof_status: {
         Args: { p_profile: string; p_status: Database["public"]["Enums"]["prof_status"] };
@@ -916,6 +948,7 @@ export type Database = {
       create_course: { Args: { p: Json; p_repeat_until?: string }; Returns: string[] };
       current_account_active: { Args: Record<PropertyKey, never>; Returns: boolean };
       current_profile_id: { Args: Record<PropertyKey, never>; Returns: string };
+      end_membership: { Args: { p_subscription: string }; Returns: undefined };
       fail_payment: { Args: { p_intent: string }; Returns: undefined };
       invoke_send_push: { Args: Record<PropertyKey, never>; Returns: number };
       is_account_active: {
@@ -934,6 +967,7 @@ export type Database = {
       is_self_or_child: { Args: { p_profile: string }; Returns: boolean };
       leave_slot: { Args: { p_course: string }; Returns: undefined };
       mark_refunded: { Args: { p_payment: string }; Returns: undefined };
+      mark_refunded_by_intent: { Args: { p_intent: string }; Returns: string };
       membership_price: {
         Args: { p_months: number; p_profile: string };
         Returns: {
@@ -962,6 +996,7 @@ export type Database = {
       };
       notify_profile: { Args: { p_course: string; p_kind: string; p_profile: string }; Returns: undefined };
       process_course_schedule: { Args: Record<PropertyKey, never>; Returns: undefined };
+      record_customer: { Args: { p_customer: string; p_profile: string }; Returns: string };
       refunds_to_process: {
         Args: { p_limit: number };
         Returns: {
@@ -992,13 +1027,33 @@ export type Database = {
       };
       register_push_token: { Args: { p_platform: string; p_token: string }; Returns: undefined };
       release_future_courses: { Args: { p_profile: string }; Returns: undefined };
+      renew_membership: {
+        Args: { p_amount: number; p_invoice: string; p_period_end: string; p_subscription: string };
+        Returns: string;
+      };
       set_attendance: { Args: { p_course: string; p_present: boolean; p_profile: string }; Returns: undefined };
       set_belt: { Args: { p_belt: Database["public"]["Enums"]["belt"]; p_profile: string }; Returns: undefined };
+      set_membership_cancel: { Args: { p_cancel_at_period_end: boolean; p_subscription: string }; Returns: undefined };
+      settle_payment_intent: { Args: { p_intent: string; p_method: string }; Returns: string };
       start_course_payment: {
         Args: { p_booking: string; p_payer: string };
         Returns: {
           amount: number;
           description: string;
+          payment_id: string;
+        }[];
+      };
+      start_membership_payment: {
+        Args: {
+          p_months: number;
+          p_payer: string;
+          p_profile: string;
+          p_source: Database["public"]["Enums"]["membership_source"];
+        };
+        Returns: {
+          amount: number;
+          description: string;
+          membership_id: string;
           payment_id: string;
         }[];
       };

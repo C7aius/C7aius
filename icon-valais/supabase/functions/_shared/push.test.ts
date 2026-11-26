@@ -61,9 +61,9 @@ Deno.test('buildPushMessages: profil sans jeton → aucun message', () => {
   assertEquals(buildPushMessages(rows, new Map([['p-none', []]]), new Map()), []);
 });
 
-Deno.test('pushText: titre et texte non vides et distincts, 4 langues x 3 types', () => {
+Deno.test('pushText: titre et texte non vides et distincts, 4 langues x 4 types', () => {
   const langs: Lang[] = ['fr', 'de', 'en', 'ru'];
-  for (const kind of ['slot_vacant', 'prof_validated', 'course_cancelled'] as const) {
+  for (const kind of ['slot_vacant', 'prof_validated', 'course_cancelled', 'membership_expiring'] as const) {
     const titles = langs.map((l) => pushText(l, kind).title);
     for (const l of langs) {
       const t = pushText(l, kind);
@@ -330,4 +330,30 @@ Deno.test('buildPushMessages: utilise sport, début du cours et prénom de l\'en
   assertStringIncludes(m.body, 'Grappling');
   assertStringIncludes(m.body, '14:30');
   assertEquals(m.data, { courseId: 'c-9' });
+});
+
+Deno.test('pushText: membership_expiring avec la date de fin (et le prénom de l\'enfant) dans les 4 langues', () => {
+  const expect: Record<Lang, string> = { fr: 'décembre', de: 'Dezember', en: 'December', ru: 'декабря' };
+  for (const [lang, month] of Object.entries(expect) as [Lang, string][]) {
+    const own = pushText(lang, 'membership_expiring', { until: '2026-12-03' }).body;
+    assertStringIncludes(own, '3', lang);
+    assertStringIncludes(own, month, lang);
+    const kid = pushText(lang, 'membership_expiring', { until: '2026-12-03', childName: 'Lina' }).body;
+    assertStringIncludes(kid, 'Lina', lang);
+    assertStringIncludes(kid, month, lang);
+    assertFalse(own.includes('Lina'));
+    assert(pushText(lang, 'membership_expiring').body.trim(), `${lang} sans date`);
+  }
+});
+
+Deno.test('buildPushMessages: membership_expiring lit ends_on dans payload', () => {
+  const r: OutboxRow = {
+    ...row(1, 'parent', 'membership_expiring', null),
+    payload: { child_profile_id: 'kid', ends_on: '2026-12-03' },
+    child_first_name: 'Lina',
+  };
+  const [m] = buildPushMessages([r], new Map([['parent', [T1]]]), new Map<string, Lang>([['parent', 'fr']]));
+  assertStringIncludes(m.body, 'Lina');
+  assertStringIncludes(m.body, 'décembre');
+  assertEquals(m.data, { courseId: null });
 });

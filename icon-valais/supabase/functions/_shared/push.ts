@@ -4,7 +4,7 @@ import { normalizeLang, type Lang } from './consent.ts';
 
 export type { Lang };
 
-export type OutboxKind = 'course_cancelled' | 'slot_vacant' | 'prof_validated';
+export type OutboxKind = 'course_cancelled' | 'slot_vacant' | 'prof_validated' | 'membership_expiring';
 
 export type OutboxRow = {
   id: number;
@@ -38,7 +38,13 @@ export const EXPO_BATCH = 100;
 export const OUTBOX_BATCH = 500;
 export const CLUB_TIME_ZONE = 'Europe/Zurich';
 
-export type PushContext = { sport?: string | null; startsAt?: string | null; childName?: string | null };
+// until : dernier jour d'une adhésion (YYYY-MM-DD, membership_expiring).
+export type PushContext = {
+  sport?: string | null;
+  startsAt?: string | null;
+  childName?: string | null;
+  until?: string | null;
+};
 
 const LOCALES: Record<Lang, string> = { fr: 'fr-CH', de: 'de-CH', en: 'en-GB', ru: 'ru-RU' };
 
@@ -72,7 +78,21 @@ function courseLabel(lang: Lang, ctx: PushContext): string | null {
   return parts.length ? parts.join(', ') : null;
 }
 
-type Body = (course: string | null, child: string | null) => string;
+// « jeudi 3 décembre » (date seule, sans fuseau : midi UTC reste le même jour à Zurich), ou null.
+function dateLabel(lang: Lang, day: string | null | undefined): string | null {
+  if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const d = new Date(`${day}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat(LOCALES[lang], {
+    timeZone: CLUB_TIME_ZONE,
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(d);
+}
+
+// course : libellé du cours ; child : prénom de l'enfant ; until : date de fin (membership_expiring)
+type Body = (course: string | null, child: string | null, until: string | null) => string;
 
 const TEXTS: Record<Lang, Record<OutboxKind, { title: string; body: Body }>> = {
   fr: {
@@ -94,6 +114,14 @@ const TEXTS: Record<Lang, Record<OutboxKind, { title: string; body: Body }>> = {
           ? c ? `Le cours de ${k} (${c}) est annulé.` : `Un cours de ${k} a été annulé.`
           : c ? `Votre cours (${c}) est annulé.` : 'Un cours auquel vous êtes inscrit a été annulé.',
     },
+    membership_expiring: {
+      title: 'Abonnement bientôt terminé',
+      body: (_c, k, u) =>
+        (k
+          ? u ? `L'abonnement de ${k} se termine le ${u}.` : `L'abonnement de ${k} se termine dans 7 jours.`
+          : u ? `Votre abonnement se termine le ${u}.` : 'Votre abonnement se termine dans 7 jours.') +
+        ' Renouvelez-le dans l\'application.',
+    },
   },
   de: {
     slot_vacant: {
@@ -113,6 +141,14 @@ const TEXTS: Record<Lang, Record<OutboxKind, { title: string; body: Body }>> = {
         k
           ? c ? `Der Kurs von ${k} (${c}) wurde abgesagt.` : `Ein Kurs von ${k} wurde abgesagt.`
           : c ? `Ihr Kurs (${c}) wurde abgesagt.` : 'Ein Kurs, für den Sie angemeldet sind, wurde abgesagt.',
+    },
+    membership_expiring: {
+      title: 'Abo endet bald',
+      body: (_c, k, u) =>
+        (k
+          ? u ? `Das Abo von ${k} endet am ${u}.` : `Das Abo von ${k} endet in 7 Tagen.`
+          : u ? `Ihr Abo endet am ${u}.` : 'Ihr Abo endet in 7 Tagen.') +
+        ' Verlängern Sie es in der App.',
     },
   },
   en: {
@@ -134,6 +170,14 @@ const TEXTS: Record<Lang, Record<OutboxKind, { title: string; body: Body }>> = {
           ? c ? `${k}'s class (${c}) has been cancelled.` : `One of ${k}'s classes has been cancelled.`
           : c ? `Your class (${c}) has been cancelled.` : 'A class you are booked on has been cancelled.',
     },
+    membership_expiring: {
+      title: 'Membership ending soon',
+      body: (_c, k, u) =>
+        (k
+          ? u ? `${k}'s membership ends on ${u}.` : `${k}'s membership ends in 7 days.`
+          : u ? `Your membership ends on ${u}.` : 'Your membership ends in 7 days.') +
+        ' Renew it in the app.',
+    },
   },
   ru: {
     slot_vacant: {
@@ -154,6 +198,14 @@ const TEXTS: Record<Lang, Record<OutboxKind, { title: string; body: Body }>> = {
           ? c ? `Занятие (${k}, ${c}) отменено.` : `Занятие (${k}) отменено.`
           : c ? `Ваше занятие (${c}) отменено.` : 'Занятие, на которое вы записаны, отменено.',
     },
+    membership_expiring: {
+      title: 'Абонемент скоро закончится',
+      body: (_c, k, u) =>
+        (k
+          ? u ? `Абонемент (${k}) заканчивается ${u}.` : `Абонемент (${k}) заканчивается через 7 дней.`
+          : u ? `Ваш абонемент заканчивается ${u}.` : 'Ваш абонемент заканчивается через 7 дней.') +
+        ' Продлите его в приложении.',
+    },
   },
 };
 
@@ -161,7 +213,7 @@ export function pushText(lang: Lang, kind: OutboxKind, ctx: PushContext = {}): {
   const l = normalizeLang(lang);
   const t = TEXTS[l][kind];
   const child = ctx.childName?.trim().slice(0, 50) || null;
-  return { title: t.title, body: t.body(courseLabel(l, ctx), child) };
+  return { title: t.title, body: t.body(courseLabel(l, ctx), child, dateLabel(l, ctx.until)) };
 }
 
 // Un message par jeton du destinataire ; destinataire sans jeton → aucun message.
@@ -178,6 +230,7 @@ export function buildPushMessages(
       sport: r.sport,
       startsAt: r.starts_at,
       childName: r.child_first_name,
+      until: typeof r.payload?.ends_on === 'string' ? r.payload.ends_on : null,
     });
     for (const to of tokens.get(r.profile_id) ?? []) {
       out.push({ to, title, body, data: { courseId: r.course_id }, sound: 'default' });
