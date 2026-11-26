@@ -356,6 +356,7 @@ export type Database = {
           source: Database["public"]["Enums"]["membership_source"];
           starts_on: string | null;
           status: Database["public"]["Enums"]["membership_status"];
+          stripe_cancel_pending: boolean;
           stripe_subscription_id: string | null;
         };
         ComputedFields: never;
@@ -374,6 +375,7 @@ export type Database = {
           source: Database["public"]["Enums"]["membership_source"];
           starts_on?: string | null;
           status?: Database["public"]["Enums"]["membership_status"];
+          stripe_cancel_pending?: boolean;
           stripe_subscription_id?: string | null;
         };
         Update: {
@@ -391,6 +393,7 @@ export type Database = {
           source?: Database["public"]["Enums"]["membership_source"];
           starts_on?: string | null;
           status?: Database["public"]["Enums"]["membership_status"];
+          stripe_cancel_pending?: boolean;
           stripe_subscription_id?: string | null;
         };
         Relationships: [
@@ -840,6 +843,66 @@ export type Database = {
         };
         Relationships: [];
       };
+      student_proofs: {
+        Row: {
+          decided_at: string | null;
+          decided_by: string | null;
+          decision: string | null;
+          id: string;
+          path: string;
+          profile_id: string;
+          submitted_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          decided_at?: string | null;
+          decided_by?: string | null;
+          decision?: string | null;
+          id?: string;
+          path: string;
+          profile_id: string;
+          submitted_at?: string;
+        };
+        Update: {
+          decided_at?: string | null;
+          decided_by?: string | null;
+          decision?: string | null;
+          id?: string;
+          path?: string;
+          profile_id?: string;
+          submitted_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "student_proofs_decided_by_fkey";
+            columns: ["decided_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "student_proofs_decided_by_fkey";
+            columns: ["decided_by"];
+            isOneToOne: false;
+            referencedRelation: "public_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "student_proofs_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "student_proofs_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "public_profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       course_booking_counts: {
@@ -857,6 +920,34 @@ export type Database = {
           course_id?: string | null;
         };
         Relationships: [];
+      };
+      pending_student_proofs: {
+        Row: {
+          age: number;
+          first_name: string;
+          id: string;
+          last_name: string;
+          path: string;
+          profile_id: string;
+          submitted_at: string;
+        };
+        ComputedFields: never;
+        Relationships: [
+          {
+            foreignKeyName: "student_proofs_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "student_proofs_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "public_profiles";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       public_profiles: {
         Row: {
@@ -900,6 +991,7 @@ export type Database = {
         };
         Returns: string;
       };
+      admin_decide_student: { Args: { p_proof: string; p_valid: boolean }; Returns: undefined };
       admin_mark_paid_current_year: { Args: { p_profile: string }; Returns: undefined };
       admin_set_prof_status: {
         Args: { p_profile: string; p_status: Database["public"]["Enums"]["prof_status"] };
@@ -943,7 +1035,7 @@ export type Database = {
       };
       confirm_parent_consent: { Args: { p_token: string }; Returns: boolean };
       confirm_payment: {
-        Args: { p_amount_cents?: number; p_currency?: string; p_intent: string; p_method: string };
+        Args: { p_amount_cents?: number; p_currency?: string; p_intent: string; p_method: string; p_payment?: string };
         Returns: string;
       };
       course_participants: {
@@ -963,6 +1055,7 @@ export type Database = {
       current_profile_id: { Args: Record<PropertyKey, never>; Returns: string };
       end_membership: { Args: { p_subscription: string }; Returns: undefined };
       fail_payment: { Args: { p_intent: string }; Returns: undefined };
+      invoke_process_refunds: { Args: Record<PropertyKey, never>; Returns: number };
       invoke_send_push: { Args: Record<PropertyKey, never>; Returns: number };
       is_account_active: {
         Args: {
@@ -981,6 +1074,7 @@ export type Database = {
       leave_slot: { Args: { p_course: string }; Returns: undefined };
       mark_refunded: { Args: { p_payment: string }; Returns: undefined };
       mark_refunded_by_intent: { Args: { p_intent: string; p_invoice?: string }; Returns: string };
+      mark_subscription_cancelled: { Args: { p_membership: string }; Returns: undefined };
       membership_price: {
         Args: { p_months: number; p_profile: string };
         Returns: {
@@ -1009,6 +1103,7 @@ export type Database = {
       };
       notify_profile: { Args: { p_course: string; p_kind: string; p_profile: string }; Returns: undefined };
       process_course_schedule: { Args: Record<PropertyKey, never>; Returns: undefined };
+      proof_path_profile: { Args: { p_path: string }; Returns: string };
       record_customer: { Args: { p_customer: string; p_profile: string }; Returns: string };
       refunds_to_process: {
         Args: { p_limit: number };
@@ -1082,6 +1177,14 @@ export type Database = {
           description: string;
           membership_id: string;
           payment_id: string;
+        }[];
+      };
+      submit_student_proof: { Args: { p_path: string; p_profile: string }; Returns: string };
+      subscriptions_to_cancel: {
+        Args: { p_limit: number };
+        Returns: {
+          membership_id: string;
+          stripe_subscription_id: string;
         }[];
       };
       take_slot: { Args: { p_course: string }; Returns: undefined };
