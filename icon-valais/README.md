@@ -210,7 +210,7 @@ deno test --config supabase/functions/deno.json supabase/functions/_shared   # E
 
 ### Test de bout en bout (Playwright)
 
-`e2e/smoke.e2e.mjs` pilote l'application web contre la stack locale (18 flux). Plan 1 : inscription
+`e2e/smoke.e2e.mjs` pilote l'application web contre la stack locale (21 flux). Plan 1 : inscription
 élève, inscription professeur (écran « en attente »), validation par un administrateur, inscription d'un
 mineur (écran de consentement parental, adresse du parent affichée, pas de faux « e-mail envoyé »),
 changement de langue, langue conservée après reconnexion et rechargement, « mot de passe oublié » de bout
@@ -228,6 +228,9 @@ paiements ; la vraie fonction `receipt` est lancée avec `deno run` (port 8000) 
 `pdftotext` (poppler) ; l'admin annule le cours → « Remboursement en cours », puis `mark_refunded` →
 « Remboursé » ; un parent prend l'abonnement 1 mois de son enfant de 12 ans (50.00 CHF, `invoice.paid`) et
 l'enfant réserve à 0 CHF ; un justificatif étudiant (PDF) est validé par l'admin → 70.00 CHF (−30 %).
+Plan 4 (flux 19 à 21) : présences cochées en SQL sur des cours passés pour trois élèves et une personne de 15 ans →
+l'onglet Classement montre l'ordre et la position de l'utilisateur, sans la personne de moins de 16 ans ; le tableau
+de bord admin affiche les heures du prof et le total « Cette année » ; le filtre « Essai » de la liste des membres.
 Prérequis supplémentaires : `deno` et `pdftotext` dans le PATH, `.env` lisible (clés de l'API locale).
 Les appels réels à l'API Stripe (create-payment, abonnements, TWINT) ne sont pas couverts : voir « Paiements Stripe ».
 Les étapes de mise en place (promotion de l'admin, déplacement d'un cours dans
@@ -274,6 +277,28 @@ d'e-mails d'authentification est atteint).
 - Une route de `Tabs` masquée par `href: null` est redirigée vers `/` par expo-router : le dossier
   `courses` (détail, création, modification) n'est donc pas masqué mais sans bouton d'onglet
   (`tabBarItemStyle: { display: 'none' }`).
+
+## Classements et statistiques
+
+Source unique : une présence compte si `attendance.present` est vrai sur un cours **non annulé** et **déjà
+commencé** (`starts_at <= now()`). Les heures sont la durée du cours (`ends_at - starts_at`), arrondie à
+2 décimales en base et affichée avec 1 décimale. Toutes les bornes de période sont en heure de Zurich.
+
+- **Classement** (onglet « Classement », RPC `attendance_ranking` et `my_ranking`) : nombre de présences, sur
+  « Depuis toujours » ou « Cette année » (année civile en cours). Seuls les comptes actifs avec au moins une
+  présence apparaissent ; rang dense (5, 5, 2 donne 1, 1, 2), tri par présences décroissantes puis nom. Les
+  filtres Top 10 / Top 20 gardent tous les ex aequo de la dernière place. L'écran n'expose que prénom, nom,
+  ceinture et nombre de présences.
+- **Moins de 16 ans** : masqués du classement (inscrits seuls avec accord parental ou enfants sans login) ; ils
+  ne prennent pas de rang et les autres rangs sont calculés sans eux. Ils peuvent ouvrir l'onglet et voient leur
+  propre position (celle qu'ils auraient s'ils étaient inclus), sans figurer dans la liste.
+- **Tableau de bord admin** (`/admin/dashboard`) : heures d'enseignement par prof (cours avec un prof, un open mat
+  sans prof ne compte pour personne) et total ; présences et heures par membre ; périodes Ce mois, Cette année
+  ou dates personnalisées (bornes incluses) ; compteurs de profs et justificatifs en attente.
+- **Segments** (liste des membres, filtres Jamais / Essai / Occasionnel / Régulier, RPC `admin_member_segments`) :
+  `jamais` = aucune présence ; `essai` = une seule présence au total ; `régulier` = 12 présences ou plus sur les
+  90 derniers jours ; sinon `occasionnel`. La liste affiche aussi le nombre de venues et la dernière venue.
+- Les RPC `admin_*` sont réservées à un admin au compte actif ; le classement à tout compte actif.
 
 ## Notes pour les plans suivants
 

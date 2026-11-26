@@ -665,6 +665,130 @@ await flow("18. Justificatif étudiant : envoi (PDF), validation admin → prix 
   return 'PDF envoyé (bucket privé), validé par l’admin ; 1 mois : 70.00 CHF (−30 % étudiant)';
 });
 
+// ---------------------------------------------------------------------------
+// Plan 4 : classement et statistiques. Présences cochées en SQL sur des cours passés.
+// ---------------------------------------------------------------------------
+const e19 = {
+  alba: `alba.${stamp}@example.com`,
+  boris: `boris.${stamp}@example.com`,
+  cleo: `cleo.${stamp}@example.com`,
+  mina: `mina.${stamp}@example.com`,
+};
+let p4 = {};
+
+await flow('19. Classement : 3 élèves + 1 moins de 16 ans, ordre, mineur absent, position de l’utilisateur', async () => {
+  for (const [k, firstName] of [['alba', 'Alba'], ['boris', 'Boris'], ['cleo', 'Cleo'], ['mina', 'Mina']]) {
+    const page = await newPage(browser);
+    await signup(page, { email: e19[k], role: 'eleve', age: 30, firstName });
+    await tabsVisible(page);
+    await page.context().close();
+  }
+  // Mina : 15 ans avec accord parental (compte actif, mais masquée du classement)
+  sql(`update profiles set age=15, parent_consent_at=now() where email='${e19.mina}'`);
+  const ids = Object.fromEntries(Object.entries(e19).map(([k, em]) => [k, profileId(em)]));
+  const paul = profileId(emails.prof);
+  // baseline d'enseignement de l'année (requête directe, indépendante des RPC) avant d'ajouter les cours
+  const yearStart = `date_trunc('year', now(), 'Europe/Zurich')`;
+  const hoursSql = (who) =>
+    `select coalesce(round(sum(extract(epoch from ends_at-starts_at))/3600,2),0) from courses where status<>'annule' and starts_at<=now() and starts_at>=${yearStart} and ${who}`;
+  const baseTotal = Number(sql(hoursSql('prof_id is not null')));
+  const basePaul = Number(sql(hoursSql(`prof_id='${paul}'`)));
+  // 5 cours passés : k1-k3 donnés par Paul (1.5 h), k4-k5 sans prof (1 h)
+  const ks = [];
+  for (let i = 1; i <= 5; i++) {
+    const withProf = i <= 3;
+    const dur = withProf ? '90 minutes' : '60 minutes';
+    const out = sql(
+      `insert into courses (sport, level, kind, location_id, starts_at, ends_at, places, prof_id, created_by)
+       select 'mma','adulte','normal', location_id, now() - interval '${i + 2} days', now() - interval '${i + 2} days' + interval '${dur}', 20, ${withProf ? `'${paul}'` : 'null'}, created_by
+       from courses limit 1 returning id`,
+    ).split('\n')[0];
+    ks.push(out);
+  }
+  const mark = (who, courses) => {
+    for (const c of courses) sql(`insert into attendance (course_id, profile_id, present) values ('${c}','${ids[who]}',true)`);
+  };
+  mark('alba', ks.slice(0, 3));
+  mark('boris', ks.slice(0, 2));
+  mark('cleo', ks.slice(0, 1));
+  mark('mina', ks);
+  p4 = { ids, ks, baseTotal, basePaul };
+
+  const page = await newPage(browser);
+  await login(page, e19.boris);
+  await tabsVisible(page);
+  await page.getByRole('tab', { name: 'Classement' }).click();
+  await page.getByText('Alba Test').waitFor();
+  await page.getByText('Ta position : n° 2 (2 présences)').waitFor();
+  await page.waitForTimeout(500);
+  const body = await page.locator('body').innerText();
+  const iA = body.indexOf('Alba Test'), iB = body.indexOf('Boris Test'), iC = body.indexOf('Cleo Test');
+  if (!(iA >= 0 && iA < iB && iB < iC)) throw new Error(`ordre inattendu Alba=${iA} Boris=${iB} Cleo=${iC}`);
+  if (body.includes('Mina Test')) throw new Error('la moins de 16 ans apparaît dans le classement');
+  if ((await page.getByTestId(`row-${ids.boris}`).count()) !== 1) throw new Error('ligne de Boris absente');
+  await shot(page, '19a-ranking-boris');
+  await page.getByRole('button', { name: 'Cette année' }).click();
+  await page.getByText('Ta position : n° 2 (2 présences)').waitFor();
+  await page.context().close();
+
+  // Mina (moins de 16 ans) voit sa propre position (n° 1, 5 présences) sans figurer dans la liste
+  const mina = await newPage(browser);
+  await login(mina, e19.mina);
+  await tabsVisible(mina);
+  await mina.getByRole('tab', { name: 'Classement' }).click();
+  await mina.getByText('Ta position : n° 1 (5 présences)').waitFor();
+  await mina.getByText('Alba Test').waitFor();
+  if ((await mina.locator('body').innerText()).includes('Mina Test')) throw new Error('Mina visible dans sa propre liste');
+  await shot(mina, '19b-ranking-minor');
+  await mina.context().close();
+  return 'ordre Alba(3) > Boris(2) > Cleo(1) ; Mina (15 ans, 5 présences) absente de la liste ; « Ta position : n° 2 (2 présences) » pour Boris, « n° 1 (5 présences) » pour Mina';
+});
+
+await flow('20. Tableau de bord admin : heures du prof et total « Cette année »', async () => {
+  const { baseTotal, basePaul, ids } = p4;
+  const expTotal = (baseTotal + 4.5).toFixed(1);
+  const expPaul = (basePaul + 4.5).toFixed(1);
+  const page = await newPage(browser);
+  await login(page, emails.admin);
+  await tabsVisible(page);
+  await page.getByRole('tab', { name: 'Admin' }).click();
+  await page.getByRole('link', { name: 'Tableau de bord' }).click();
+  await page.getByRole('button', { name: 'Cette année' }).click();
+  await page.getByText(`Total : ${expTotal} h`).waitFor();
+  const paulRow = page.locator('div').filter({ hasText: /^Paul Test/ }).filter({ hasText: ' h - ' }).last();
+  const paulText = (await paulRow.innerText()).replace(/\s+/g, ' ');
+  if (!paulText.includes(`${expPaul} h`)) throw new Error(`ligne Paul : « ${paulText} », attendu ${expPaul} h`);
+  const albaRow = page.locator('div').filter({ hasText: /^Alba Test/ }).filter({ hasText: ' h - ' }).last();
+  const albaText = (await albaRow.innerText()).replace(/\s+/g, ' ');
+  if (!albaText.includes('4.5 h') || !albaText.includes('3 présences')) throw new Error(`ligne Alba : « ${albaText} »`);
+  await shot(page, '20-dashboard');
+  await page.context().close();
+  void ids;
+  return `Total : ${expTotal} h (base ${baseTotal} + 4.5) ; Paul ${expPaul} h ; Alba « ${albaText} »`;
+});
+
+await flow('21. Liste des membres : filtre « Essai » ne montre que les élèves venus une fois', async () => {
+  const onceSql = `select p.first_name from profiles p where (select count(*) from attendance a join courses c on c.id=a.course_id where a.profile_id=p.id and a.present and c.status<>'annule' and c.starts_at<=now())=1`;
+  const once = sql(onceSql).split('\n').filter(Boolean);
+  if (!once.includes('Cleo')) throw new Error(`Cleo devrait être « essai » : ${once}`);
+  const page = await newPage(browser);
+  await login(page, emails.admin);
+  await tabsVisible(page);
+  await page.getByRole('tab', { name: 'Admin' }).click();
+  await page.getByText('Cleo Test').first().waitFor();
+  await page.getByRole('button', { name: 'Essai', exact: true }).click();
+  await page.getByText('Cleo Test').first().waitFor();
+  await page.waitForTimeout(500);
+  const body = await page.locator('body').innerText();
+  for (const n of ['Alba Test', 'Boris Test', 'Mina Test']) {
+    if (body.includes(n)) throw new Error(`${n} affiché avec le filtre Essai`);
+  }
+  for (const n of once) if (!body.includes(`${n} `)) throw new Error(`${n} (1 venue) absent du filtre Essai`);
+  await shot(page, '21-filter-essai');
+  await page.context().close();
+  return `filtre Essai : ${once.join(', ')} ; Alba, Boris, Mina absents`;
+});
+
 await browser.close();
 const failed = results.filter((r) => r.status !== 'PASS');
 console.log(`\n${results.length - failed.length}/${results.length} flux OK`);
