@@ -1046,9 +1046,27 @@ export type Database = {
         };
         Returns: string;
       };
+      admin_member_hours: {
+        Args: { p_from: string; p_to: string };
+        Returns: { profile_id: string; first_name: string; last_name: string; sessions: number; hours: number }[];
+      };
       admin_member_overview: {
         Args: never;
         Returns: { profile_id: string; member_until: string | null; trial_used: number }[];
+      };
+      admin_member_segments: {
+        Args: never;
+        Returns: {
+          profile_id: string;
+          visits_total: number;
+          visits_90d: number;
+          segment: "jamais" | "essai" | "occasionnel" | "regulier";
+          last_visit: string | null;
+        }[];
+      };
+      admin_teaching_hours: {
+        Args: { p_from: string; p_to: string };
+        Returns: { prof_id: string; first_name: string; last_name: string; courses: number; hours: number }[];
       };
       admin_decide_student: { Args: { p_proof: string; p_valid: boolean }; Returns: undefined };
       admin_mark_paid_current_year: { Args: { p_profile: string }; Returns: undefined };
@@ -1066,6 +1084,17 @@ export type Database = {
       apply_stripe_event: { Args: { p_args: Json; p_fn: string; p_id: string; p_type: string }; Returns: string };
       assign_prof: { Args: { p_course: string; p_prof: string }; Returns: undefined };
       attach_payment_intent: { Args: { p_intent: string; p_payment: string }; Returns: string };
+      attendance_ranking: {
+        Args: { p_limit?: number; p_period?: string };
+        Returns: {
+          rank: number;
+          profile_id: string;
+          first_name: string;
+          last_name: string;
+          bjj_belt: Database["public"]["Enums"]["belt"] | null;
+          sessions: number;
+        }[];
+      };
       book_course: {
         Args: { p_course: string; p_profile?: string };
         Returns: {
@@ -1096,6 +1125,10 @@ export type Database = {
       confirm_payment: {
         Args: { p_amount_cents?: number; p_currency?: string; p_intent: string; p_method: string; p_payment?: string };
         Returns: string;
+      };
+      counted_attendance: {
+        Args: { p_from?: string; p_to?: string };
+        Returns: { profile_id: string; course_id: string; starts_at: string; hours: number }[];
       };
       course_participants: {
         Args: { p_course: string };
@@ -1157,6 +1190,7 @@ export type Database = {
           until: string;
         }[];
       };
+      my_ranking: { Args: { p_period?: string }; Returns: { rank: number | null; sessions: number }[] };
       my_trial_status: {
         Args: { p_profile?: string };
         Returns: {
@@ -1275,6 +1309,8 @@ export type Database = {
           payment_id: string;
         }[];
       };
+      stats_period_start: { Args: { p_period: string }; Returns: string | null };
+      stats_range: { Args: { p_from: string; p_to: string }; Returns: { r_from: string; r_to: string } };
       submit_student_proof: { Args: { p_path: string; p_profile: string }; Returns: string };
       subscriptions_to_cancel: {
         Args: { p_limit: number };
