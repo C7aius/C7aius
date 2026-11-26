@@ -872,7 +872,7 @@ export type Database = {
       admin_update_pricing: { Args: { p: Json }; Returns: undefined };
       admin_upsert_location: { Args: { p: Json }; Returns: string };
       assign_prof: { Args: { p_course: string; p_prof: string }; Returns: undefined };
-      attach_payment_intent: { Args: { p_intent: string; p_payment: string }; Returns: undefined };
+      attach_payment_intent: { Args: { p_intent: string; p_payment: string }; Returns: string };
       book_course: {
         Args: { p_course: string; p_profile?: string };
         Returns: {

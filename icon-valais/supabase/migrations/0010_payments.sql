@@ -11,8 +11,9 @@
 --    plus 5 min). L'index unique bookings_one_active_idx garde son prédicat
 --    (cancelled_at is null) : tout chemin qui insère ou réactive une ligne
 --    annule d'abord les lignes en attente expirées du même (cours, profil).
---  * Prix (book_course, calcul serveur seul) : adhérent (is_member, date du
---    jour) → price_member ; sinon trial_used < 10 → 0 et free_trial ; sinon
+--  * Prix (book_course, calcul serveur seul) : adhérent (is_member au jour
+--    local du cours) → price_member ; sinon cours gratuit (price_non_member
+--    = 0) → 0 sans essai ; sinon trial_used < 10 → 0 et free_trial ; sinon
 --    price_non_member. Montant > 0 → pending, 15 min pour payer. Un verrou sur
 --    le profil bénéficiaire sérialise ses réservations (compteur d'essais).
 --  * Réserver de nouveau : en attente valide → même réservation, délai
@@ -21,8 +22,11 @@
 --  * unbook_course : payée → reste paid (pas de remboursement) ; en attente →
 --    libérée (payment_status = 'none' : un paiement qui aboutirait ensuite est
 --    remboursé, la réservation n'est pas réactivée).
---  * cancel_course : réservations paid des cours annulés (désinscrites
---    comprises) → refund_pending, et leurs paiements succeeded → refund_pending.
+--  * cancel_course : réservations paid encore actives des cours annulés →
+--    refund_pending, et leurs paiements succeeded → refund_pending (payée puis
+--    désinscrite : pas de remboursement).
+--  * set_attendance(present) sur une réservation en attente : présent gratuit
+--    (price 0, none) ; attach_payment_intent ne remplace jamais un intent lié.
 --  * payments : lecture payeur, bénéficiaire, parent du bénéficiaire, admin ;
 --    aucune écriture client.
 --  * Fonctions service_role (Edge Functions), idempotentes ; sans auth.uid() :
@@ -249,8 +253,12 @@ begin
     return;
   end if;
 
-  if public.is_member(v_profile) then
+  -- adhésion évaluée au jour (local) du cours ; un cours gratuit pour les
+  -- non-adhérents ne consomme pas d'essai
+  if public.is_member(v_profile, (v_c.starts_at at time zone 'Europe/Zurich')::date) then
     v_price := v_c.price_member;
+  elsif v_c.price_non_member = 0 then
+    v_price := 0;
   elsif public.trial_used(v_profile) < 10 then
     v_price := 0;
     v_trial := true;
@@ -349,6 +357,16 @@ begin
     raise exception 'set_attendance: profile not found' using errcode = 'P0002';
   end if;
 
+  -- présent avec une réservation en attente de paiement : devient un présent
+  -- gratuit (le planificateur ne pourra plus la libérer ni effacer l'appel ;
+  -- un paiement qui aboutirait ensuite est remboursé)
+  if p_present then
+    update public.bookings
+       set price = 0, payment_status = 'none', pending_until = null
+     where course_id = p_course and profile_id = p_profile and cancelled_at is null
+       and payment_status = 'pending' and pending_until > now();
+  end if;
+
   if not exists (select 1 from public.bookings
                   where course_id = p_course and profile_id = p_profile and cancelled_at is null
                     and (payment_status <> 'pending' or pending_until > now())) then
@@ -438,12 +456,14 @@ begin
       and b.cancelled_at is null
       and (b.payment_status <> 'pending' or b.pending_until > now());
 
-  -- remboursements : réservations payées (désinscrites comprises)
+  -- remboursements : réservations payées encore actives (une réservation
+  -- payée puis désinscrite n'est pas remboursée)
   with r as (
     update public.bookings b
        set payment_status = 'refund_pending'
      where b.course_id = any (coalesce(v_ids, '{}'))
        and b.payment_status = 'paid'
+       and b.cancelled_at is null
     returning b.id
   )
   select array_agg(id) into v_refund from r;
@@ -545,6 +565,10 @@ begin
    where booking_id = v_b.id and status = 'pending'
    order by created_at desc
    limit 1;
+  if v_p.id is not null and v_p.payer_profile_id is distinct from v_payer.id then
+    update public.payments set payer_profile_id = v_payer.id where id = v_p.id
+    returning * into v_p;
+  end if;
   if v_p.id is null then
     insert into public.payments (kind, payer_profile_id, beneficiary_profile_id, booking_id, amount, description)
     values ('course', v_payer.id, v_b.profile_id, v_b.id, v_b.price,
@@ -559,9 +583,12 @@ begin
 end;
 $$;
 
--- Lie un PaymentIntent Stripe à un paiement en attente (le remplace s'il
--- change). Même intent : sans effet.
-create function public.attach_payment_intent(p_payment uuid, p_intent text) returns void
+-- Lie un PaymentIntent Stripe à un paiement et renvoie l'intent à utiliser.
+-- Un intent déjà lié n'est jamais remplacé : il est renvoyé (l'Edge Function
+-- le réutilise et abandonne celui qu'elle vient de créer), si bien qu'un
+-- intent qui aboutit est toujours connu de confirm_payment. Sans intent lié,
+-- le paiement doit être pending (sinon 22023 not_pending).
+create function public.attach_payment_intent(p_payment uuid, p_intent text) returns text
 language plpgsql security definer set search_path = '' as $$
 declare
   v_p public.payments;
@@ -574,14 +601,15 @@ begin
   if v_p.id is null then
     raise exception 'attach_payment_intent: payment not found' using errcode = 'P0002';
   end if;
-  if v_p.stripe_payment_intent_id is not distinct from p_intent then
-    return;
+  if v_p.stripe_payment_intent_id is not null then
+    return v_p.stripe_payment_intent_id;
   end if;
   if v_p.status <> 'pending' then
     raise exception 'attach_payment_intent: payment is not pending'
       using errcode = '22023', hint = 'not_pending';
   end if;
   update public.payments set stripe_payment_intent_id = p_intent where id = p_payment;
+  return p_intent;
 end;
 $$;
 

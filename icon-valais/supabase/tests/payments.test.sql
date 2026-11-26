@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(131);
+select plan(145);
 
 create temp table ids (k text primary key, v uuid);
 grant all on ids to authenticated, service_role;
@@ -160,6 +160,13 @@ select pg_temp.mk('mc', interval '5 days');
 select pg_temp.mk('f1', interval '5 days 1 hour');
 select pg_temp.mk('near', interval '20 minutes');
 select pg_temp.mk('free', interval '6 days', 0, 0);
+select pg_temp.mk('far', interval '40 days');
+select pg_temp.mk('fut', interval '20 days');
+select pg_temp.mk('near2', interval '25 minutes');
+-- pa : adhésion qui commence dans 10 jours (couvre fut, pas aujourd'hui)
+insert into public.memberships (profile_id, source, months, starts_on, ends_on, status, amount)
+values (pg_temp.k('pa'), 'one_time', 1, (now() at time zone 'Europe/Zurich')::date + 10,
+        (now() at time zone 'Europe/Zurich')::date + 40, 'active', 100);
 
 -- ---------------------------------------------------------------------------
 -- Structure
@@ -175,6 +182,14 @@ select is(enum_range(null::public.payment_state)::text, '{pending,succeeded,fail
 -- ---------------------------------------------------------------------------
 -- Essais : 10 réservations gratuites, puis prix non-adhérent
 -- ---------------------------------------------------------------------------
+-- cours gratuit pour les non-adhérents : pas d'essai consommé
+select pg_temp.login('11000000-0000-0000-0000-000000000011');
+select pg_temp.bk('n_free', pg_temp.k('free'));
+select is((select amount || ' ' || needs from bk where k = 'n_free'), '0.00 false', 'cours gratuit : 0, rien à payer');
+reset role;
+select is((select free_trial::text || ' ' || payment_status from public.bookings where id = pg_temp.b('n_free')),
+          'false none', 'cours gratuit : free_trial = false');
+select is(public.trial_used(pg_temp.k('n')), 0, 'cours gratuit : trial_used inchangé');
 select pg_temp.login('11000000-0000-0000-0000-000000000011');
 select pg_temp.bk('t' || i, pg_temp.k('t' || i)) from generate_series(1, 10) i;
 select is((select count(*)::int from bk where k ~ '^t' and amount = 0 and not needs), 10,
@@ -214,6 +229,19 @@ select is((select free_trial::text || ' ' || payment_status from public.bookings
           'false pending', 'adhérent : free_trial = false');
 select is((select payment_status from public.bookings where id = pg_temp.b('m_free')), 'none', 'adhérent, 0 : none');
 select is(public.trial_used(pg_temp.k('m')), 0, 'adhérent : trial_used inchangé');
+-- adhésion évaluée au jour du cours
+select pg_temp.login('22000000-0000-0000-0000-000000000022');
+select pg_temp.bk('m_far', pg_temp.k('far'));
+reset role;
+select is((select free_trial::text || ' ' || price from public.bookings where id = pg_temp.b('m_far')),
+          'true 0.00', 'adhésion finie avant le cours : tarif non-adhérent (essai)');
+select pg_temp.login('9a000000-0000-0000-0000-00000000009a');
+select pg_temp.bk('pa_fut', pg_temp.k('fut'));
+reset role;
+select is((select amount || ' ' || needs from bk where k = 'pa_fut'), '5.00 true',
+          'adhésion qui commence avant le cours (après aujourd''hui) : prix adhérent');
+select is((select free_trial from public.bookings where id = pg_temp.b('pa_fut')), false,
+          'adhésion future : pas d''essai');
 
 -- my_trial_status : soi ou son enfant
 select pg_temp.login('9a000000-0000-0000-0000-00000000009a');
@@ -287,6 +315,20 @@ select is(pg_temp.active(pg_temp.k('near'), pg_temp.k('n')), 1, 'appel : une ré
 select is(pg_temp.bst(pg_temp.b('near')), 'pending false', 'appel : l''expirée est annulée');
 select is((select present from public.attendance where course_id = pg_temp.k('near') and profile_id = pg_temp.k('n')),
           true, 'appel : présent');
+-- présent avec une réservation en attente (valide) : devient un présent gratuit
+select pg_temp.login('11000000-0000-0000-0000-000000000011');
+select pg_temp.bk('near2', pg_temp.k('near2'));
+reset role;
+select pg_temp.login('b1000000-0000-0000-0000-0000000000b1');
+select lives_ok(format('select public.set_attendance(%L, %L, true)', pg_temp.k('near2'), pg_temp.k('n')),
+                'appel : en attente + présent');
+reset role;
+select is((select price || ' ' || payment_status || ' ' || (pending_until is null)::text || ' ' || (cancelled_at is null)::text
+             from public.bookings where id = pg_temp.b('near2')),
+          '0.00 none true true', 'appel : en attente → présent gratuit, même réservation');
+select public.process_course_schedule();
+select is((select count(*)::int from public.attendance where course_id = pg_temp.k('near2') and profile_id = pg_temp.k('n')),
+          1, 'appel : le planificateur ne l''efface pas');
 
 -- ---------------------------------------------------------------------------
 -- start_course_payment / attach_payment_intent / confirm_payment
@@ -298,8 +340,11 @@ select is(pg_temp.pm('t11b'), pg_temp.pm('t11'), 'start_course_payment deux fois
 select is((select amount from pay where k = 't11'), 20.00, 'start_course_payment : montant de la réservation');
 select ok((select description from pay where k = 't11') like 'Cours %', 'start_course_payment : description');
 select lives_ok(format('select public.attach_payment_intent(%L, %L)', pg_temp.pm('t11'), 'pi_t11'), 'attach_payment_intent');
-select lives_ok(format('select public.attach_payment_intent(%L, %L)', pg_temp.pm('t11'), 'pi_t11'),
-                'attach_payment_intent deux fois');
+select is(public.attach_payment_intent(pg_temp.pm('t11'), 'pi_t11'), 'pi_t11', 'attach_payment_intent deux fois');
+select is(public.attach_payment_intent(pg_temp.pm('t11'), 'pi_other'), 'pi_t11',
+          'attach_payment_intent : un intent lié n''est pas remplacé, il est renvoyé');
+select is((select stripe_payment_intent_id from public.payments where id = pg_temp.pm('t11')), 'pi_t11',
+          'attach_payment_intent : intent inchangé');
 select is(public.confirm_payment('pi_t11', 'card'), 'confirmed', 'confirm_payment → confirmed');
 select is(public.confirm_payment('pi_t11', 'twint'), 'already', 'confirm_payment deux fois → already');
 select throws_ok($$ select public.confirm_payment('pi_unknown', 'card') $$, 'P0002', null, 'intent inconnu → P0002');
@@ -335,6 +380,10 @@ select throws_ok(format('select * from public.start_course_payment(%L, %L)', pg_
 select pg_temp.sp('f1ch', pg_temp.b('f1ch'), pg_temp.k('pa'));
 select is((select payer_profile_id || ' ' || beneficiary_profile_id from public.payments where id = pg_temp.pm('f1ch')),
           pg_temp.k('pa') || ' ' || pg_temp.k('ch'), 'parent payeur, enfant bénéficiaire');
+select pg_temp.sp('f1ch2', pg_temp.b('f1ch'), pg_temp.k('ch'));
+select is(pg_temp.pm('f1ch2'), pg_temp.pm('f1ch'), 'reprise par un autre payeur : même paiement');
+select is((select payer_profile_id from public.payments where id = pg_temp.pm('f1ch')), pg_temp.k('ch'),
+          'reprise : payer_profile_id = le payeur courant');
 reset role;
 -- payeur inactif
 insert into public.bookings (course_id, profile_id, booked_by, price, payment_status, pending_until)
@@ -446,6 +495,15 @@ select is((select booking_id || ' ' || amount || ' ' || needs_payment from publi
 reset role;
 select is(pg_temp.bst(pg_temp.b('l1')), 'paid true', 'déjà payé : réactivée');
 select is((select count(*)::int from public.payments where booking_id = pg_temp.b('l1')), 1, 'déjà payé : pas de 2e paiement');
+-- payée puis désinscrite, cours annulé ensuite : pas de remboursement
+select pg_temp.login('11000000-0000-0000-0000-000000000011');
+select public.unbook_course(pg_temp.k('l1'));
+reset role;
+select pg_temp.login('a0000000-0000-0000-0000-00000000000a');
+select public.cancel_course(pg_temp.k('l1'), 'one');
+reset role;
+select is(pg_temp.bst(pg_temp.b('l1')) || ' ' || pg_temp.pst(pg_temp.pm('l1')), 'paid false succeeded',
+          'payée puis désinscrite : pas remboursée à l''annulation');
 
 -- ---------------------------------------------------------------------------
 -- Annulation par le club : remboursement
