@@ -80,6 +80,54 @@ describe('Ranking', () => {
     expect(screen.getByTestId('row-a').props.accessibilityState).toEqual({ selected: false });
   });
 
+  it('ligne de l’utilisateur : libellé d’accessibilité avec marqueur « toi »', async () => {
+    await render(<Ranking />);
+    await settle();
+    const me = screen.getByTestId('row-me');
+    expect(me.props.accessible).toBe(true);
+    expect(me.props.accessibilityLabel).toBe('4, Moi X, Bleue, 5 présences, toi');
+    expect(screen.getByTestId('row-a').props.accessibilityLabel).toBeUndefined();
+  });
+
+  it('pluriel français : 1 présence / 2 présences', async () => {
+    ranking = [row(1, 'a', 'Anna', 1), row(2, 'b', 'Bob', 2)];
+    mine = [{ rank: 1, sessions: 1 }];
+    await render(<Ranking />);
+    await settle();
+    expect(screen.getByText('1 présence')).toBeTruthy();
+    expect(screen.getByText('2 présences')).toBeTruthy();
+    expect(screen.getByText('Ta position : n° 1 (1 présence)')).toBeTruthy();
+  });
+
+  it('réponses dans le désordre : la plus récente gagne', async () => {
+    const resolvers: Record<string, (v: unknown) => void> = {};
+    mockRpc.mockImplementation((fn: string, args: { p_limit?: number }) =>
+      new Promise((res) => {
+        resolvers[`${fn}:${args.p_limit ?? 'all'}`] = res;
+      }),
+    );
+    await render(<Ranking />);
+    await fireEvent.press(screen.getByText('Top 10'));
+    await act(async () => {
+      resolvers['attendance_ranking:10']({ data: [row(1, 'new', 'Nouveau', 9)], error: null });
+      resolvers['my_ranking:all']({ data: [{ rank: 1, sessions: 9 }], error: null });
+    });
+    await act(async () => {
+      resolvers['attendance_ranking:all']({ data: [row(1, 'old', 'Ancien', 1)], error: null });
+    });
+    expect(screen.getByText('Nouveau X')).toBeTruthy();
+    expect(screen.queryByText('Ancien X')).toBeNull();
+  });
+
+  it('changement de période : la position est réinitialisée pendant le chargement', async () => {
+    await render(<Ranking />);
+    await settle();
+    mockRpc.mockImplementation(() => new Promise(() => {}));
+    await fireEvent.press(screen.getByText('Cette année'));
+    expect(screen.queryByText(/Ta position/)).toBeNull();
+    expect(screen.getByLabelText('Chargement…')).toBeTruthy();
+  });
+
   it('sans présence : message dédié', async () => {
     mine = [{ rank: null, sessions: 0 }];
     await render(<Ranking />);
@@ -99,5 +147,24 @@ describe('Ranking', () => {
     await render(<Ranking />);
     await settle();
     expect(screen.getByText('Une erreur est survenue')).toBeTruthy();
+  });
+});
+
+describe('Ranking (ru)', () => {
+  afterAll(async () => {
+    await initI18n('fr');
+  });
+  it.each([
+    [1, 'посещение'],
+    [3, 'посещения'],
+    [5, 'посещений'],
+    [21, 'посещение'],
+  ])('%i -> %s', async (n, word) => {
+    await initI18n('ru');
+    ranking = [row(1, 'a', 'Anna', n)];
+    mine = [{ rank: 1, sessions: n }];
+    await render(<Ranking />);
+    await settle();
+    expect(screen.getAllByText(`${n} ${word}`).length).toBeGreaterThan(0);
   });
 });

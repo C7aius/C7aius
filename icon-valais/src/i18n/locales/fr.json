@@ -218,10 +218,13 @@
     "all": "Tous",
     "allTime": "Toujours",
     "thisYear": "Cette année",
-    "myPosition": "Ta position : n° {{rank}} ({{count}} présences)",
     "noAttendance": "Pas encore de présence",
     "empty": "Aucune présence enregistrée pour le moment.",
-    "sessions": "{{count}} présences"
+    "sessions_one": "{{count}} présence",
+    "sessions_other": "{{count}} présences",
+    "myPosition_one": "Ta position : n° {{rank}} ({{count}} présence)",
+    "myPosition_other": "Ta position : n° {{rank}} ({{count}} présences)",
+    "you": "toi"
   },
   "errors": {
     "generic": "Une erreur est survenue",

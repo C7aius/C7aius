@@ -218,10 +218,13 @@
     "all": "Alle",
     "allTime": "Gesamt",
     "thisYear": "Dieses Jahr",
-    "myPosition": "Deine Position: Nr. {{rank}} ({{count}} Anwesenheiten)",
     "noAttendance": "Noch keine Anwesenheit",
     "empty": "Noch keine Anwesenheiten erfasst.",
-    "sessions": "{{count}} Anwesenheiten"
+    "sessions_one": "{{count}} Anwesenheit",
+    "sessions_other": "{{count}} Anwesenheiten",
+    "myPosition_one": "Deine Position: Nr. {{rank}} ({{count}} Anwesenheit)",
+    "myPosition_other": "Deine Position: Nr. {{rank}} ({{count}} Anwesenheiten)",
+    "you": "du"
   },
   "errors": {
     "generic": "Ein Fehler ist aufgetreten",

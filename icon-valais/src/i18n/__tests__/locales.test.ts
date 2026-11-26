@@ -10,13 +10,16 @@ const flatten = (obj: Record<string, unknown>, prefix = ''): Record<string, unkn
   }, {});
 
 const fr = flatten(require('../locales/fr.json'));
-const frKeys = Object.keys(fr).sort();
+// i18next plural variants (CLDR suffixes) differ per language: compare base keys only
+const PLURAL = /_(zero|one|two|few|many|other)$/;
+const baseKeys = (flat: Record<string, unknown>) => [...new Set(Object.keys(flat).map((k) => k.replace(PLURAL, '')))].sort();
+const frKeys = baseKeys(fr);
 
 describe.each(['de', 'en', 'ru'])('locale %s', (lang) => {
   const flat = flatten(require(`../locales/${lang}.json`));
 
   it('has the same keys as fr.json', () => {
-    expect(Object.keys(flat).sort()).toEqual(frKeys);
+    expect(baseKeys(flat)).toEqual(frKeys);
   });
 
   it('has no empty values', () => {
@@ -30,4 +33,20 @@ describe.each(['de', 'en', 'ru'])('locale %s', (lang) => {
 it('fr.json has no empty values', () => {
   const empty = Object.entries(fr).filter(([, v]) => typeof v !== 'string' || v.trim() === '');
   expect(empty).toEqual([]);
+});
+
+describe('plural forms', () => {
+  const required: Record<string, string[]> = {
+    fr: ['one', 'other'],
+    de: ['one', 'other'],
+    en: ['one', 'other'],
+    ru: ['one', 'few', 'many', 'other'],
+  };
+  it.each(Object.keys(required))('%s has every CLDR plural variant for each plural key', (lang) => {
+    const flat = flatten(require(`../locales/${lang}.json`));
+    const bases = Object.keys(flat).filter((k) => PLURAL.test(k)).map((k) => k.replace(PLURAL, ''));
+    for (const base of new Set(bases)) {
+      for (const cat of required[lang]) expect(flat).toHaveProperty([`${base}_${cat}`]);
+    }
+  });
 });

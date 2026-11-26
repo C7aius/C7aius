@@ -218,10 +218,17 @@
     "all": "Все",
     "allTime": "За всё время",
     "thisYear": "В этом году",
-    "myPosition": "Твоя позиция: № {{rank}} ({{count}} посещений)",
     "noAttendance": "Посещений пока нет",
     "empty": "Пока нет отмеченных посещений.",
-    "sessions": "{{count}} посещений"
+    "sessions_one": "{{count}} посещение",
+    "sessions_few": "{{count}} посещения",
+    "sessions_many": "{{count}} посещений",
+    "sessions_other": "{{count}} посещения",
+    "myPosition_one": "Твоя позиция: № {{rank}} ({{count}} посещение)",
+    "myPosition_few": "Твоя позиция: № {{rank}} ({{count}} посещения)",
+    "myPosition_many": "Твоя позиция: № {{rank}} ({{count}} посещений)",
+    "myPosition_other": "Твоя позиция: № {{rank}} ({{count}} посещения)",
+    "you": "ты"
   },
   "errors": {
     "generic": "Произошла ошибка",
