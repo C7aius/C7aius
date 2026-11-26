@@ -1,0 +1,314 @@
+import { Platform } from 'react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+
+import { initI18n } from '@/src/i18n';
+import Courses from '../index';
+
+const mockRpc = jest.fn();
+const mockInvoke = jest.fn();
+const mockInitSheet = jest.fn();
+const mockPresent = jest.fn();
+const mockPush = jest.fn();
+let mockTables: Record<string, unknown[]> = {};
+let mockCoursesQueue: Promise<unknown[]>[] | null = null;
+let mockCoursesCalls = 0;
+let mockAuth: { profile: { id: string; role: string }; isActive: boolean } = { profile: { id: 'me', role: 'eleve' }, isActive: true };
+let mockKids: { id: string; first_name: string }[] = [];
+
+jest.mock('@/src/auth/AuthProvider', () => ({
+  useAuth: () => ({ ...mockAuth, ready: true }),
+}));
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush }),
+  useFocusEffect: (cb: () => void) => {
+    require('react').useEffect(cb, [cb]);
+  },
+}));
+jest.mock('@/src/lib/supabase', () => ({
+  supabase: {
+    rpc: (...a: unknown[]) => mockRpc(...a),
+    functions: { invoke: (...a: unknown[]) => mockInvoke(...a) },
+    from: (table: string) => {
+      const q: Record<string, unknown> = {};
+      for (const m of ['select', 'eq', 'in', 'is', 'or', 'gte', 'lt', 'order', 'limit']) q[m] = () => q;
+      q.then = (res: (v: unknown) => unknown) => {
+        if (table === 'courses' && mockCoursesQueue) {
+          mockCoursesCalls++;
+          return mockCoursesQueue.shift()!.then((data) => ({ data, error: null })).then(res);
+        }
+        return Promise.resolve({ data: table === 'profiles' ? mockKids : (mockTables[table] ?? []), error: null }).then(res);
+      };
+      return q;
+    },
+  },
+}));
+
+jest.mock('@stripe/stripe-react-native', () => ({
+  initStripe: jest.fn(),
+  initPaymentSheet: (...a: unknown[]) => mockInitSheet(...a),
+  presentPaymentSheet: (...a: unknown[]) => mockPresent(...a),
+}));
+
+const future = new Date(Date.now() + 2 * 24 * 3600 * 1000);
+const iso = (d: Date, addH = 0) => new Date(d.getTime() + addH * 3600 * 1000).toISOString();
+const loc = { id: 'l1', name: 'Dojo Sion', address: 'Rue du Rhône 1, Sion', maps_url: 'https://maps.google.com/?q=sion' };
+const course = (over: Record<string, unknown>) => ({
+  id: 'c1', sport: 'jjb', level: 'adulte', kind: 'normal', status: 'prevu', prof_id: 'pr1', location_id: 'l1',
+  starts_at: iso(future), ends_at: iso(future, 1.5), places: 20, price_member: 0, price_non_member: 25,
+  is_private: false, location: loc, ...over,
+});
+
+beforeAll(async () => {
+  await initI18n('fr');
+});
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockAuth = { profile: { id: 'me', role: 'eleve' }, isActive: true };
+  mockCoursesQueue = null;
+  mockCoursesCalls = 0;
+  mockRpc.mockResolvedValue({ data: 'b1', error: null });
+  mockKids = [];
+  Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'ios' });
+  mockInitSheet.mockResolvedValue({});
+  mockPresent.mockResolvedValue({});
+  mockInvoke.mockResolvedValue({
+    data: { paymentIntentClientSecret: 's', customerId: 'c', ephemeralKeySecret: 'e', publishableKey: 'pk', amount: 20 },
+    error: null,
+  });
+  mockTables = {
+    courses: [course({})],
+    public_profiles: [{ id: 'pr1', first_name: 'Marc', last_name: 'Prof' }],
+    course_booking_counts: [{ course_id: 'c1', booked: 3 }],
+    bookings: [],
+  };
+});
+
+it('shows no + button to a student', async () => {
+  await render(<Courses />);
+  await screen.findByText(/Marc Prof/);
+  expect(screen.queryByLabelText('Nouveau cours')).toBeNull();
+});
+
+it('shows no + button to a pending prof', async () => {
+  mockAuth = { profile: { id: 'me', role: 'prof' }, isActive: false };
+  await render(<Courses />);
+  await screen.findByText(/Marc Prof/);
+  expect(screen.queryByLabelText('Nouveau cours')).toBeNull();
+});
+
+it('an active prof gets a + button leading to the creation form', async () => {
+  mockAuth = { profile: { id: 'me', role: 'prof' }, isActive: true };
+  await render(<Courses />);
+  await screen.findByText(/Marc Prof/);
+  await fireEvent.press(screen.getByLabelText('Nouveau cours'));
+  expect(mockPush).toHaveBeenCalledWith('/courses/new');
+});
+
+it('shows prof, counts and prices', async () => {
+  await render(<Courses />);
+  expect(await screen.findByText(/Marc Prof/)).toBeTruthy();
+  expect(screen.getByText('3 / 20 inscrits')).toBeTruthy();
+  expect(screen.getByText('Adhérent : Gratuit')).toBeTruthy();
+  expect(screen.getByText('Non-adhérent : 25.00 CHF')).toBeTruthy();
+});
+
+it('cancelled course has no book button', async () => {
+  mockTables.courses = [course({ status: 'annule' })];
+  await render(<Courses />);
+  expect(await screen.findByText('Annulé')).toBeTruthy();
+  expect(screen.queryByText('Réserver')).toBeNull();
+});
+
+it('vacant course shows Créneau libre', async () => {
+  mockTables.courses = [course({ prof_id: null })];
+  await render(<Courses />);
+  expect(await screen.findByText('Créneau libre')).toBeTruthy();
+});
+
+it('book calls book_course', async () => {
+  await render(<Courses />);
+  await fireEvent.press(await screen.findByText('Réserver'));
+  await waitFor(() => expect(mockRpc).toHaveBeenCalledWith('book_course', { p_course: 'c1' }));
+});
+
+it('unbook when already booked', async () => {
+  mockTables.bookings = [{ course_id: 'c1', profile_id: 'me' }];
+  await render(<Courses />);
+  await fireEvent.press(await screen.findByText('Se désinscrire'));
+  await waitFor(() => expect(mockRpc).toHaveBeenCalledWith('unbook_course', { p_course: 'c1' }));
+});
+
+it('parent books for a child', async () => {
+  mockKids = [{ id: 'k1', first_name: 'Léo' }];
+  await render(<Courses />);
+  await fireEvent.press(await screen.findByText('Léo'));
+  await fireEvent.press(screen.getByText('Réserver'));
+  await waitFor(() => expect(mockRpc).toHaveBeenCalledWith('book_course', { p_course: 'c1', p_profile: 'k1' }));
+});
+
+it('shows translated error for course_closed', async () => {
+  mockRpc.mockResolvedValue({ data: null, error: { code: 'P0001', hint: 'course_closed' } });
+  await render(<Courses />);
+  await fireEvent.press(await screen.findByText('Réserver'));
+  expect(await screen.findByText('Ce cours est annulé ou a déjà commencé.')).toBeTruthy();
+});
+
+it('expands location with address and https link', async () => {
+  await render(<Courses />);
+  await fireEvent.press(await screen.findByLabelText("Lieu Dojo Sion"));
+  expect(screen.getByText('Rue du Rhône 1, Sion')).toBeTruthy();
+  const link = screen.getByRole('link');
+  expect(link.props.href).toMatch(/^https:\/\//);
+});
+
+it('tapping a card navigates to the detail', async () => {
+  await render(<Courses />);
+  await fireEvent.press(await screen.findByLabelText(/Jiu-jitsu brésilien/));
+  expect(mockPush).toHaveBeenCalledWith('/courses/c1');
+});
+
+it('pressing book, a child chip or the location toggle does not open the detail', async () => {
+  mockKids = [{ id: 'k1', first_name: 'Léo' }];
+  await render(<Courses />);
+  await fireEvent.press(await screen.findByText('Léo'));
+  await fireEvent.press(screen.getByText('Réserver'));
+  await fireEvent.press(screen.getByLabelText('Lieu Dojo Sion'));
+  expect(mockPush).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByLabelText(/Jiu-jitsu brésilien/));
+  expect(mockPush).toHaveBeenCalledWith('/courses/c1');
+});
+
+it('ignores a stale response after a quick week switch', async () => {
+  let resolveA!: (v: unknown[]) => void;
+  let resolveB!: (v: unknown[]) => void;
+  mockCoursesQueue = [
+    new Promise((r) => { resolveA = r; }),
+    new Promise((r) => { resolveB = r; }),
+  ];
+  await render(<Courses />);
+  await waitFor(() => expect(mockCoursesCalls).toBe(1));
+  await fireEvent.press(screen.getByLabelText('Semaine suivante'));
+  await waitFor(() => expect(mockCoursesCalls).toBe(2));
+  await act(async () => { resolveB([course({ id: 'c2', price_non_member: 22 })]); });
+  expect(await screen.findByText('Non-adhérent : 22.00 CHF')).toBeTruthy();
+  await act(async () => { resolveA([course({ id: 'c1', price_non_member: 11 })]); });
+  expect(screen.getByText('Non-adhérent : 22.00 CHF')).toBeTruthy();
+  expect(screen.queryByText('Non-adhérent : 11.00 CHF')).toBeNull();
+});
+
+describe('payment', () => {
+  const rpcWith = (trial: { used: number; trial_limit: number }, member: boolean, book: unknown) =>
+    mockRpc.mockImplementation(async (name: string) => {
+      if (name === 'my_trial_status') return { data: [trial], error: null };
+      if (name === 'my_membership') return { data: [{ is_member: member, until: null }], error: null };
+      if (name === 'book_course') return { data: book, error: null };
+      return { data: null, error: null };
+    });
+  const paidBooking = { booking_id: 'b9', amount: 20, needs_payment: true };
+
+  it('non-member sees the trial counter 3/10', async () => {
+    rpcWith({ used: 3, trial_limit: 10 }, false, []);
+    await render(<Courses />);
+    expect(await screen.findByText("Cours d'essai — 3/10 utilisés")).toBeTruthy();
+  });
+
+  it('member sees no trial counter', async () => {
+    rpcWith({ used: 3, trial_limit: 10 }, true, []);
+    await render(<Courses />);
+    await screen.findByText(/Marc Prof/);
+    await waitFor(() => expect(mockRpc).toHaveBeenCalledWith('my_membership', { p_profile: 'me' }));
+    expect(screen.queryByText(/Cours d'essai/)).toBeNull();
+  });
+
+  it('11th course opens the confirmation with the server amount, the exact notice and a member link', async () => {
+    rpcWith({ used: 10, trial_limit: 10 }, false, [paidBooking]);
+    await render(<Courses />);
+    await fireEvent.press(await screen.findByText('Réserver'));
+    expect(await screen.findByText('20.00 CHF')).toBeTruthy();
+    expect(screen.getByText('Remboursé uniquement si le cours est annulé par le professeur.')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Devenir adhérent'));
+    expect(mockPush).toHaveBeenCalledWith('/profile/membership');
+  });
+
+  it('successful payment calls create-payment with kind/bookingId only, then reloads', async () => {
+    rpcWith({ used: 10, trial_limit: 10 }, false, [paidBooking]);
+    mockTables.bookings = [{ course_id: 'c1', profile_id: 'other', payment_status: 'paid' }]; // relu par le sondage du paiement
+    await render(<Courses />);
+    await fireEvent.press(await screen.findByText('Réserver'));
+    await fireEvent.press(await screen.findByText('Payer'));
+    await waitFor(() =>
+      expect(mockInvoke).toHaveBeenCalledWith('create-payment', {
+        body: { kind: 'course', bookingId: 'b9', platform: 'native' },
+      }),
+    );
+    await waitFor(() => expect(screen.queryByText('Payer')).toBeNull());
+    const weekCalls = () => mockRpc.mock.calls.filter(([n]) => n === 'my_trial_status').length;
+    await waitFor(() => expect(weekCalls()).toBeGreaterThanOrEqual(2)); // rechargé
+  });
+
+  it('cancelled payment shows no paid state', async () => {
+    rpcWith({ used: 10, trial_limit: 10 }, false, [paidBooking]);
+    mockPresent.mockResolvedValue({ error: { code: 'Canceled' } });
+    await render(<Courses />);
+    await fireEvent.press(await screen.findByText('Réserver'));
+    await fireEvent.press(await screen.findByText('Payer'));
+    await waitFor(() => expect(mockPresent).toHaveBeenCalled());
+    expect(screen.queryByText('Paiement confirmé.')).toBeNull();
+    expect(screen.queryByText('Paiement en cours de confirmation…')).toBeNull();
+  });
+
+  it('web redirects to the Checkout url', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'web' });
+    const assign = jest.fn();
+    (globalThis as unknown as { window: unknown }).window = { location: { assign } };
+    mockInvoke.mockResolvedValue({ data: { checkoutUrl: 'https://checkout.stripe.com/c/x' }, error: null });
+    rpcWith({ used: 10, trial_limit: 10 }, false, [paidBooking]);
+    await render(<Courses />);
+    await fireEvent.press(await screen.findByText('Réserver'));
+    await fireEvent.press(await screen.findByText('Payer'));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/x'));
+    delete (globalThis as unknown as { window?: unknown }).window;
+  });
+
+  it('a member booking a 0 CHF course gets no payment screen', async () => {
+    rpcWith({ used: 0, trial_limit: 10 }, true, [{ booking_id: 'b8', amount: 0, needs_payment: false }]);
+    await render(<Courses />);
+    await fireEvent.press(await screen.findByText('Réserver'));
+    await waitFor(() => expect(mockRpc).toHaveBeenCalledWith('book_course', { p_course: 'c1' }));
+    expect(screen.queryByText('Payer')).toBeNull();
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('a pending booking shows the hold line and a Payer button that opens the pay sheet, then pays that booking', async () => {
+    rpcWith({ used: 10, trial_limit: 10 }, false, []);
+    const until = new Date(Date.now() + 10 * 60 * 1000);
+    mockTables.bookings = [
+      { id: 'bp1', course_id: 'c1', profile_id: 'me', payment_status: 'pending', pending_until: until.toISOString(), price: '25.00' },
+    ];
+    await render(<Courses />);
+    const hhmm = new Intl.DateTimeFormat('fr-CH', { timeZone: 'Europe/Zurich', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(until);
+    expect(await screen.findByText(`Paiement en attente — place retenue jusqu'à ${hhmm}`)).toBeTruthy();
+    expect(screen.getByText('Se désinscrire')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Payer'));
+    // confirmation d'abord : montant et mention de remboursement, aucun paiement lancé
+    expect(await screen.findByText('Confirmer la réservation')).toBeTruthy();
+    expect(screen.getByText('25.00 CHF')).toBeTruthy();
+    expect(screen.getByText('Remboursé uniquement si le cours est annulé par le professeur.')).toBeTruthy();
+    expect(mockInvoke).not.toHaveBeenCalled();
+    const payButtons = screen.getAllByText('Payer');
+    await fireEvent.press(payButtons[payButtons.length - 1]);
+    await waitFor(() =>
+      expect(mockInvoke).toHaveBeenCalledWith('create-payment', {
+        body: { kind: 'course', bookingId: 'bp1', platform: 'native' },
+      }),
+    );
+  });
+
+  it('a paid booking shows no Payer button', async () => {
+    rpcWith({ used: 10, trial_limit: 10 }, false, []);
+    mockTables.bookings = [{ id: 'bp1', course_id: 'c1', profile_id: 'me', payment_status: 'paid', pending_until: null }];
+    await render(<Courses />);
+    await screen.findByText('Se désinscrire');
+    expect(screen.queryByText('Payer')).toBeNull();
+  });
+});

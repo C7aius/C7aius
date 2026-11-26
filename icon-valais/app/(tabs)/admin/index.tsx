@@ -1,0 +1,228 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
+
+import { useAuth, type Profile } from '@/src/auth/AuthProvider';
+import { AccountDetail } from '@/src/components/admin/AccountDetail';
+import { Chip, ErrorText, Field } from '@/src/components/ui';
+import { formatDate } from '@/src/domain/adminErrors';
+import { fetchMemberSegments, type MemberSegmentRow, type Segment } from '@/src/lib/statsApi';
+import { supabase } from '@/src/lib/supabase';
+import { colors } from '@/src/theme';
+
+type Filter = 'all' | 'eleve' | 'prof' | 'admin' | 'pending';
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: 'all', label: 'admin.filterAll' },
+  { key: 'pending', label: 'admin.filterPending' },
+  { key: 'eleve', label: 'admin.filterEleve' },
+  { key: 'prof', label: 'admin.filterProf' },
+  { key: 'admin', label: 'admin.filterAdmin' },
+];
+type Membership = 'member' | 'non';
+const MEMBERSHIPS: { key: Membership; label: string }[] = [
+  { key: 'member', label: 'admin.filterMember' },
+  { key: 'non', label: 'admin.filterNonMember' },
+];
+const SEGMENTS: { key: Segment; label: string }[] = [
+  { key: 'jamais', label: 'admin.segJamais' },
+  { key: 'essai', label: 'admin.segEssai' },
+  { key: 'occasionnel', label: 'admin.segOccasionnel' },
+  { key: 'regulier', label: 'admin.segRegulier' },
+];
+const ROLE_KEY = { eleve: 'admin.roleEleve', prof: 'admin.roleProf', admin: 'admin.roleAdmin' } as const;
+const WIDE = 900;
+const TRIAL_LIMIT = 10;
+
+export default function Admin() {
+  const { t } = useTranslation();
+  const { profile, ready } = useAuth();
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const { filter: filterParam } = useLocalSearchParams<{ filter?: string }>();
+  const wide = width >= WIDE;
+  const [rows, setRows] = useState<Profile[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<Filter>(filterParam === 'pending' ? 'pending' : 'all');
+  useEffect(() => {
+    if (filterParam === 'pending') setFilter('pending');
+  }, [filterParam]);
+  const [membership, setMembership] = useState<Membership | null>(null);
+  const [segment, setSegment] = useState<Segment | null>(null);
+  const [stats, setStats] = useState<Record<string, MemberSegmentRow>>({});
+  const [selected, setSelected] = useState<string | null>(null);
+  const [overview, setOverview] = useState<Record<string, { until: string | null; trials: number }>>({});
+  const isAdmin = profile?.role === 'admin';
+
+  const load = useCallback(async () => {
+    try {
+      const { data, error: e } = await supabase.from('profiles').select('*').order('last_name');
+      if (e) setError('errors.generic');
+      else {
+        setRows((data ?? []) as Profile[]);
+        setError(null);
+      }
+    } catch {
+      setError('errors.network');
+    }
+    // badges d'adhésion / essais : un seul appel ; en cas d'échec la liste s'affiche sans badge
+    try {
+      const { data } = await supabase.rpc('admin_member_overview');
+      const map: Record<string, { until: string | null; trials: number }> = {};
+      for (const o of (Array.isArray(data) ? data : []) as { profile_id: string; member_until: string | null; trial_used: number }[]) {
+        map[o.profile_id] = { until: o.member_until, trials: o.trial_used };
+      }
+      setOverview(map);
+    } catch {
+      setOverview({});
+    }
+    // venues / dernière venue / segment : idem, la liste reste utilisable sans
+    try {
+      const map: Record<string, MemberSegmentRow> = {};
+      for (const r of await fetchMemberSegments()) map[r.profile_id] = r;
+      setStats(map);
+    } catch {
+      setStats({});
+    }
+  }, []);
+
+  // recharge à chaque retour sur l'écran (ex. après une action dans la fiche)
+  useFocusEffect(
+    useCallback(() => {
+      if (isAdmin) void load();
+    }, [isAdmin, load]),
+  );
+
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (filter === 'pending' && !(r.role === 'prof' && r.prof_status === 'en_attente')) return false;
+      if ((filter === 'eleve' || filter === 'prof' || filter === 'admin') && r.role !== filter) return false;
+      if (membership) {
+        const isMember = !!overview[r.id]?.until;
+        if ((membership === 'member') !== isMember) return false;
+      }
+      if (segment && stats[r.id]?.segment !== segment) return false;
+      if (!q) return true;
+      return `${r.first_name} ${r.last_name} ${r.email ?? ''}`.toLowerCase().includes(q);
+    });
+  }, [rows, query, filter, membership, segment, overview, stats]);
+
+  if (!isAdmin) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.body}>{ready ? t('admin.forbidden') : t('common.loading')}</Text>
+      </View>
+    );
+  }
+
+  const open = (id: string) => {
+    if (wide) setSelected(id);
+    else router.push({ pathname: '/admin/user/[id]', params: { id } });
+  };
+
+  const list = (
+    <View>
+      <Text style={styles.title}>{t('admin.title')}</Text>
+      <View style={styles.links}>
+        <Pressable accessibilityRole="link" onPress={() => router.push('/admin/dashboard')}>
+          <Text style={styles.link}>{t('admin.dashboardLink')}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="link" onPress={() => router.push('/admin/locations')}>
+          <Text style={styles.link}>{t('admin.locations')}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="link" onPress={() => router.push('/admin/pricing')}>
+          <Text style={styles.link}>{t('admin.pricingLink')}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="link" onPress={() => router.push('/admin/students')}>
+          <Text style={styles.link}>{t('admin.studentsLink')}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="link" onPress={() => router.push('/admin/payments')}>
+          <Text style={styles.link}>{t('admin.paymentsLink')}</Text>
+        </Pressable>
+      </View>
+      <Field label={t('common.search')} value={query} onChangeText={setQuery} />
+      <View style={styles.chips}>
+        {FILTERS.map((f) => (
+          <Chip key={f.key} label={t(f.label)} selected={filter === f.key} onPress={() => setFilter(f.key)} />
+        ))}
+      </View>
+      <View style={styles.chips}>
+        {MEMBERSHIPS.map((m) => (
+          <Chip key={m.key} label={t(m.label)} selected={membership === m.key} onPress={() => setMembership(membership === m.key ? null : m.key)} />
+        ))}
+      </View>
+      <View style={styles.chips}>
+        {SEGMENTS.map((g) => (
+          <Chip key={g.key} label={t(g.label)} selected={segment === g.key} onPress={() => setSegment(segment === g.key ? null : g.key)} />
+        ))}
+      </View>
+      <ErrorText>{error ? t(error) : null}</ErrorText>
+      {shown.length === 0 && !error ? <Text style={styles.body}>{t('admin.noResults')}</Text> : null}
+      {shown.map((r) => (
+        <Pressable
+          key={r.id}
+          accessibilityRole="button"
+          onPress={() => open(r.id)}
+          style={[styles.item, selected === r.id && wide && styles.itemSelected]}
+        >
+          <Text style={styles.itemName}>{`${r.first_name} ${r.last_name}`}</Text>
+          <Text style={styles.itemMeta}>
+            {t(ROLE_KEY[r.role])}
+            {r.role === 'prof' && r.prof_status === 'en_attente' ? ` - ${t('admin.pending')}` : ''}
+          </Text>
+          {overview[r.id] ? (
+            <Text style={styles.itemMeta}>
+              {overview[r.id].until
+                ? t('admin.paidUntil', { date: formatDate(overview[r.id].until as string) })
+                : r.role === 'eleve'
+                  ? `${t('admin.nonMember')} - ${t('admin.trials', { used: overview[r.id].trials, limit: TRIAL_LIMIT })}`
+                  : t('admin.nonMember')}
+            </Text>
+          ) : null}
+          {stats[r.id] ? (
+            <Text style={styles.itemMeta}>
+              {`${t('admin.visits', { count: stats[r.id].visits_total })} - ${
+                stats[r.id].last_visit ? t('admin.lastVisit', { date: formatDate(stats[r.id].last_visit as string) }) : t('admin.lastVisitNone')
+              }`}
+            </Text>
+          ) : null}
+        </Pressable>
+      ))}
+    </View>
+  );
+
+  if (!wide) return <ScrollView style={styles.screen} contentContainerStyle={styles.container}>{list}</ScrollView>;
+
+  return (
+    <View style={[styles.screen, styles.wideRow]}>
+      <ScrollView style={styles.wideCol} contentContainerStyle={styles.container}>{list}</ScrollView>
+      <ScrollView style={styles.wideDetail} contentContainerStyle={styles.container}>
+        {selected ? (
+          <AccountDetail key={selected} id={selected} onChanged={() => void load()} />
+        ) : (
+          <Text style={styles.body}>{t('admin.selectAccount')}</Text>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.anthracite },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.anthracite, padding: 24 },
+  container: { padding: 24, paddingTop: 60 },
+  wideRow: { flexDirection: 'row' },
+  wideCol: { width: 380, borderRightWidth: 1, borderRightColor: colors.grey },
+  wideDetail: { flex: 1 },
+  title: { color: colors.orange, fontSize: 24, fontWeight: '700', marginBottom: 12 },
+  links: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 },
+  link: { color: colors.orange, textDecorationLine: 'underline', marginBottom: 12, fontSize: 16 },
+  body: { color: colors.white, marginBottom: 8 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 },
+  item: { paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: colors.grey },
+  itemSelected: { backgroundColor: '#3A3A3A' },
+  itemName: { color: colors.white, fontSize: 16 },
+  itemMeta: { color: colors.grey, fontSize: 13 },
+});

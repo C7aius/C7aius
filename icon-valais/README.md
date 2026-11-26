@@ -1,0 +1,344 @@
+# Icon Valais
+
+Application de club (Expo Router + Supabase) : comptes élèves / professeurs / administrateurs,
+consentement parental pour les moins de 16 ans, interface en 4 langues (fr, de, en, ru).
+
+## Prérequis
+
+- Node.js 20+ et npm
+- Docker (pour la stack Supabase locale)
+- [Deno](https://deno.com) (tests des Edge Functions)
+- Playwright (uniquement pour le test e2e)
+
+```bash
+npm install
+```
+
+## Configuration (`.env`)
+
+Créer `icon-valais/.env` (ignoré par git, ne jamais le committer) avec les valeurs affichées par
+`npx supabase status` :
+
+```
+EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+EXPO_PUBLIC_SUPABASE_ANON_KEY=<ANON_KEY ou PUBLISHABLE_KEY>
+```
+
+## Backend local
+
+```bash
+npx supabase start     # démarre Postgres, Auth, REST, etc. et applique supabase/migrations
+npx supabase status    # URL et clés
+npx supabase db reset  # (optionnel) rejoue les migrations depuis zéro
+npx supabase stop
+```
+
+### Edge Functions
+
+`send-parent-consent`, `confirm-parent-consent`, `delete-account` et `send-push` sont dans `supabase/functions`.
+Secrets requis (à définir avec `npx supabase secrets set ...` en production, ou dans un fichier
+`supabase/functions/.env` pour `npx supabase functions serve`) :
+
+| Variable | Rôle |
+| --- | --- |
+| `RESEND_API_KEY` | clé API Resend pour l'envoi de l'e-mail au parent |
+| `CONSENT_FROM_EMAIL` | adresse expéditrice (domaine vérifié chez Resend) |
+| `PUBLIC_FUNCTIONS_URL` | (optionnel) URL publique des fonctions, utilisée pour construire le lien de confirmation ; à défaut, déduite de la requête |
+
+`SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` sont fournis automatiquement par Supabase.
+
+## Notifications et tâches planifiées
+
+Les notifications sont écrites dans `notification_outbox` (annulation de cours, créneau sans prof,
+prof validé) puis envoyées par l'Edge Function `send-push` (Expo Push). L'application enregistre le
+jeton Expo de l'appareil avec `register_push_token(p_token, p_platform)` (table `push_tokens`).
+
+Deux tâches `pg_cron` sont créées par la migration `0006_notifications.sql` :
+
+| Tâche | Fréquence | Rôle |
+| --- | --- | --- |
+| `process-course-schedule` | toutes les 5 minutes | `process_course_schedule()` : cours sans prof dans les 24 h → notification `slot_vacant` aux profs validés et aux admins, aux admins seulement pour un cours privé (une seule fois par cours) ; cours sans prof commencé → Open Mat |
+| `send-push` | chaque minute | s'il reste des notifications en attente, appelle `POST <functions_url>/send-push` via `pg_net` |
+
+`send-push` n'accepte que la clé `service_role` (`Authorization: Bearer <clé>`). La tâche lit l'URL et
+la clé dans Supabase Vault ; tant que ces deux secrets n'existent pas, elle ne fait rien (sans erreur).
+À créer une fois par projet (éditeur SQL du tableau de bord, ou `psql`) :
+
+```sql
+select vault.create_secret('https://<project-ref>.supabase.co/functions/v1', 'functions_url');
+select vault.create_secret('<clé service_role du projet>', 'service_role_key');
+```
+
+`functions_url` est la base des fonctions, sans `/send-push`. `service_role_key` doit être la même
+valeur que `SUPABASE_SERVICE_ROLE_KEY` dans les fonctions (clé JWT `service_role`, page *Settings → API*).
+Pour la changer : `select vault.update_secret(id, '<nouvelle valeur>') from vault.secrets where name = 'service_role_key';`.
+En local (depuis le conteneur Postgres) : `http://supabase_kong_icon-valais:8000/functions/v1` et la
+clé `service_role` affichée par `npx supabase status`.
+
+La clé `service_role` transite par la file de requêtes de `pg_net` (`net.http_request_queue`, dans
+la base, le temps de l'envoi) : seul le rôle `postgres` / `service_role` y a accès.
+
+Secret optionnel de la fonction : `EXPO_ACCESS_TOKEN` (si la sécurité renforcée des notifications push
+est activée sur le projet Expo). `send-push` réserve ses lignes avec `claim_outbox(p_limit)` (verrou
+`SKIP LOCKED`, réservation valable 5 minutes) : deux exécutions qui se chevauchent n'envoient pas deux
+fois la même notification. Chaque ligne reçoit `sent_at` (au moins un appareil accepté) ou `error` :
+`no_push_token`, code d'erreur Expo, `http_4xx` (message refusé, renvoyé seul), `max_attempts`
+(5 tentatives) ou `expired` (créneau vacant ou annulation d'un cours déjà commencé). Si Expo est
+injoignable, limite le débit (429) ou refuse le jeton d'accès (401/403), la ligne est libérée et
+réessayée la minute suivante (jusqu'à `max_attempts`). Les jetons signalés
+`DeviceNotRegistered` sont supprimés ; un profil garde au plus 10 jetons. Les textes (fr/de/en/ru
+selon `profiles.language`) indiquent le sport et la date et l'heure du cours (heure de Zurich), et le
+prénom de l'enfant quand un parent est notifié pour lui.
+
+## Paiements Stripe
+
+Edge Functions : `create-payment`, `cancel-subscription`, `process-refunds`, `receipt` et `stripe-webhook`
+(`supabase/functions`, logique testée dans `_shared/payments.ts`, `_shared/receipt.ts`,
+`_shared/stripeWebhook.ts`).
+
+| Secret | Rôle |
+| --- | --- |
+| `STRIPE_SECRET_KEY` | clé secrète (`sk_test_…` / `sk_live_…`) ; jamais journalisée ni renvoyée |
+| `STRIPE_PUBLISHABLE_KEY` | clé publiable (`pk_…`), renvoyée à l'app native pour la PaymentSheet |
+| `STRIPE_WEBHOOK_SECRET` | secret de signature de l'endpoint webhook (`whsec_…`) |
+| `PUBLIC_APP_URL` | **obligatoire pour le web** : adresse de l'app web (ex. `https://app.icon-valais.ch`) pour les retours de Stripe Checkout ; sans elle, `create-payment` web répond 500 `not_configured` (l'en-tête `Origin` n'est jamais utilisé) |
+
+```sh
+npx supabase secrets set STRIPE_SECRET_KEY=sk_live_... STRIPE_PUBLISHABLE_KEY=pk_live_... \
+  STRIPE_WEBHOOK_SECRET=whsec_... PUBLIC_APP_URL=https://app.icon-valais.ch
+```
+
+**Version de l'API Stripe : `2024-06-20`**, épinglée par l'en-tête `Stripe-Version` de chaque appel
+(`STRIPE_API_VERSION` dans `_shared/stripe.ts`). L'endpoint webhook peut utiliser n'importe quelle
+version : si un événement `invoice.paid` ne contient pas `payment_intent` (versions récentes), le
+webhook le demande à Stripe (`GET /v1/invoices/<id>`, à défaut `GET /v1/invoice_payments?invoice=<id>`,
+avec la version épinglée) avant d'appeler la base. La base refuse (`missing_intent`, Stripe réessaie)
+de régler une adhésion sans intent connu : chaque paiement reste remboursable. Le webhook a donc
+aussi besoin de `STRIPE_SECRET_KEY`.
+
+**Webhook** (tableau de bord Stripe → Developers → Webhooks → Add endpoint) :
+URL `https://<project-ref>.supabase.co/functions/v1/stripe-webhook` (fonction sans JWT,
+`verify_jwt: false` dans `config.jsonc` ; la signature `Stripe-Signature` est vérifiée).
+Événements à cocher : `payment_intent.succeeded`, `payment_intent.payment_failed`, `invoice.paid`,
+`customer.subscription.updated`, `customer.subscription.deleted`, `charge.refunded`, `refund.failed`,
+`charge.refund.updated` (un remboursement refusé après coup par Stripe repasse en `refund_failed`).
+Activer TWINT (Settings → Payment methods) pour les paiements en CHF.
+
+**Retours Stripe Checkout (web)** : `<PUBLIC_APP_URL>/payment-result?status=success|cancel&payment=<payment_id>&kind=course|membership`
+(le texte d'annulation dépend de `kind` : place retenue 15 minutes pour un cours, rien d'activé pour une adhésion).
+La page Checkout d'un cours affiche « Remboursé uniquement si le cours est annulé par le professeur. ». Le statut
+affiché doit être relu en base (le webhook fait foi), pas déduit du paramètre `status`.
+
+**Metadata** (le webhook en dépend) : PaymentIntent `payment_id` + `booking_id` (cours) ou
+`membership_id` (adhésion payée en une fois) ; Subscription `membership_id` + `payment_id`.
+Un intent Checkout, inconnu jusqu'au paiement, est rattaché au paiement par `metadata.payment_id`.
+
+**Clients Stripe** : un client par profil payeur, créé au premier paiement (`record_customer`),
+réutilisé ensuite. **Produit** des abonnements : `icon_valais_membership`, créé automatiquement.
+
+**Remboursements** : tâche `pg_cron` `process-refunds` toutes les 5 minutes (migration
+`0012_payment_followups.sql`, mêmes secrets Vault `functions_url` / `service_role_key` que `send-push`) :
+elle n'appelle la fonction que s'il y a un paiement `refund_pending` ou un abonnement à annuler. Un
+montant reçu différent du montant attendu (ou un second paiement pour la même réservation) est
+remboursé automatiquement ; un abonnement dont une facture (première ou renouvellement) a un mauvais
+montant est en plus annulé immédiatement chez Stripe. Chaque ligne est traitée isolément : une erreur
+la laisse pour plus tard sans bloquer les autres, avec un délai exponentiel (5 min, 10, 20, … :
+`refund_attempts` / `refund_next_attempt_at`) ; au 8ᵉ échec le paiement passe en **`refund_failed`**, affiché
+en tête de Admin → Paiements (« Remboursements échoués ») : rembourser alors depuis le tableau de bord Stripe
+(`charge.refunded` le marque « Remboursé »). Un paiement à rembourser sans intent connu passe directement en
+`refund_failed`.
+
+Sont aussi remboursés automatiquement (et l'abonnement annulé immédiatement) : un second abonnement activé
+alors qu'un autre se renouvelle déjà pour le même profil (`duplicate_subscription`), une facture de
+renouvellement d'une adhésion terminée (`ended_refund`), un paiement qui aboutit pour une adhésion abandonnée
+(`late_refund`). Une adhésion `pending` depuis plus de 24 h (paiement abandonné) est terminée par
+`process_course_schedule()` et son paiement passe en `failed` ; « Mes paiements » n'affiche aux membres ni les
+paiements en attente ni les échoués (l'admin voit tout).
+
+**Compte supprimé / abonnements orphelins** : `delete-account` annule d'abord chez Stripe
+(`DELETE /v1/subscriptions/<id>`) les abonnements encore actifs de l'appelant et de ses enfants (échec → 500,
+compte intact ; il lui faut donc aussi `STRIPE_SECRET_KEY`). Filet de sécurité : une facture ou un paiement
+Stripe dont l'adhésion n'existe plus est noté dans `orphan_stripe_items` (`'orphan'`, plus d'erreur P0002 que
+Stripe rejouerait sans fin) ; `process-refunds` rembourse l'intent et annule l'abonnement. Un parent ne peut pas
+supprimer par l'API un profil enfant qui a un abonnement actif (42501 `live_subscription`, message traduit) :
+résilier d'abord.
+
+**Quittances** : `GET /functions/v1/receipt?payment=<id>[&lang=fr|de|en|ru]` (jeton de l'utilisateur)
+→ PDF, visible du payeur, du bénéficiaire, de son parent et de l'admin (RLS de `payments`) ; jeton
+invalide → 401 ; paiement non réglé ou rendu pour anomalie (montant différent, double paiement) → 409.
+
+**Cartes de test** (mode test Stripe, n'importe quelle date future et CVC) : `4242 4242 4242 4242` (succès),
+`4000 0000 0000 9995` (refusée, fonds insuffisants), `4000 0025 0000 3155` (authentification 3-D Secure requise).
+TWINT : en mode test, la page de test Stripe permet de simuler le succès ou l'échec. Pour recevoir les
+événements en local : `stripe listen --forward-to http://127.0.0.1:54321/functions/v1/stripe-webhook`
+(le `whsec_…` affiché devient `STRIPE_WEBHOOK_SECRET`).
+
+**Mise en route** : créer le compte Stripe, activer TWINT, définir les quatre secrets ci-dessus
+(`npx supabase secrets set …`), déployer les fonctions (`npx supabase functions deploy`), ajouter l'endpoint
+webhook avec les six événements, créer les secrets Vault `functions_url` / `service_role_key` (cron des
+remboursements, voir « Notifications et tâches planifiées »), puis régler les tarifs dans
+Admin → Tarifs.
+
+**Limites** :
+
+- Une réservation payante retient la place 15 minutes ; passé ce délai la place peut être reprise, et un
+  paiement qui aboutit trop tard pour une réservation qui ne peut plus être honorée est remboursé
+  automatiquement (`late_refund`).
+- Remboursement uniquement quand le cours est annulé (total, jamais partiel) ; un élève qui se désinscrit
+  d'un cours payé garde sa réservation payée et peut se réinscrire sans repayer.
+- Tâche `process-refunds` toutes les 5 minutes : un remboursement n'est donc pas instantané
+  (« Remboursement en cours » jusqu'au passage suivant).
+- Le webhook fait foi : l'application ne déduit jamais un paiement réussi du retour de Stripe.
+- Les nouveaux comptes de test Stripe n'ont pas toujours TWINT activé ; sans lui, seule la carte est proposée.
+- Les paiements natifs (PaymentSheet) ne sont testables que sur appareil (plan 5) ; sur le web, Stripe Checkout.
+
+## Lancer l'application
+
+```bash
+npx expo start          # puis w (web), i (iOS) ou a (Android)
+npx expo start --web    # web directement
+```
+
+## Tests
+
+```bash
+npx tsc --noEmit                                                    # types
+npx jest                                                            # tests unitaires / composants
+npx supabase test db                                                # tests pgTAP (stack locale démarrée)
+deno test --config supabase/functions/deno.json supabase/functions/_shared   # Edge Functions (aussi : npm run test:functions)
+```
+
+### Test de bout en bout (Playwright)
+
+`e2e/smoke.e2e.mjs` pilote l'application web contre la stack locale (21 flux). Plan 1 : inscription
+élève, inscription professeur (écran « en attente »), validation par un administrateur, inscription d'un
+mineur (écran de consentement parental, adresse du parent affichée, pas de faux « e-mail envoyé »),
+changement de langue, langue conservée après reconnexion et rechargement, « mot de passe oublié » de bout
+en bout (lien lu dans Mailpit, nouveau mot de passe, connexion). Plan 2 (cours, flux 8 à 13, enchaînés) :
+l'admin crée un cours récurrent (3 occurrences) visible dans le planning ; un élève réserve, se désinscrit
+puis réserve de nouveau ; un prof prend le créneau vacant ; le prof fait l'appel (cours déplacé dans le
+passé proche en SQL) ; l'admin annule « ce cours et les suivants » (statut « Annulé » et lignes
+`course_cancelled` dans `notification_outbox`, vérifiées en SQL) ; `process_course_schedule()` appelé en
+SQL fait passer un cours vacant commencé en « Open Mat » (et écrit les lignes `slot_vacant` d'un cours
+vacant dans moins de 24 h). Plan 3 (paiements, flux 14 à 18, Stripe simulé : aucun appel réseau vers Stripe) : un non-adhérent réserve
+10 cours gratuits puis le 11ᵉ affiche 20.00 CHF et la mention de remboursement, « Payer » est repris
+depuis le planning, puis `payment_intent.succeeded` est rejoué (`e2e/stripe-route.ts` exécute le vrai
+`routeStripeEvent` du webhook, puis la RPC `apply_stripe_event`) → réservation payée, « Payé » dans Mes
+paiements ; la vraie fonction `receipt` est lancée avec `deno run` (port 8000) et le PDF vérifié avec
+`pdftotext` (poppler) ; l'admin annule le cours → « Remboursement en cours », puis `mark_refunded` →
+« Remboursé » ; un parent prend l'abonnement 1 mois de son enfant de 12 ans (50.00 CHF, `invoice.paid`) et
+l'enfant réserve à 0 CHF ; un justificatif étudiant (PDF) est validé par l'admin → 70.00 CHF (−30 %).
+Plan 4 (flux 19 à 21) : présences cochées en SQL sur des cours passés pour trois élèves et une personne de 15 ans →
+l'onglet Classement montre l'ordre et la position de l'utilisateur, sans la personne de moins de 16 ans ; le tableau
+de bord admin affiche les heures du prof et le total « Cette année » ; le filtre « Essai » de la liste des membres.
+Prérequis supplémentaires : `deno` et `pdftotext` dans le PATH, `.env` lisible (clés de l'API locale).
+Les appels réels à l'API Stripe (create-payment, abonnements, TWINT) ne sont pas couverts : voir « Paiements Stripe ».
+Les étapes de mise en place (promotion de l'admin, déplacement d'un cours dans
+le passé, appel de `process_course_schedule()`, lecture de l'outbox) passent par `docker exec ... psql`.
+En cas d'échec d'un flux, une capture `FAIL-<n>.png` est écrite dans `SHOT_DIR`.
+
+```bash
+npx supabase start
+npx expo start --web --port 8081      # dans un autre terminal, avec .env rempli
+SHOT_DIR=/tmp/e2e node e2e/smoke.e2e.mjs   # ou : npm run e2e
+```
+
+Variables : `BASE_URL` (défaut `http://localhost:8081`), `SHOT_DIR` (captures d'écran),
+`MAIL_URL` (Mailpit, défaut `http://127.0.0.1:54324`, voir `npx supabase status` ; s'il est injoignable le
+flux « mot de passe oublié » est marqué NON VÉRIFIÉ),
+`DB_CONTAINER` (défaut `supabase_db_icon-valais`, utilisé via `docker exec` pour promouvoir
+l'administrateur de test). Le paquet `playwright` doit être résolvable par Node
+(`npm i -g playwright` puis `NODE_PATH=$(npm root -g)` si nécessaire). L'envoi réel de l'e-mail au
+parent n'est pas vérifié (Edge Functions non démarrées par ce script).
+
+Remarques : la stack locale limite l'envoi d'e-mails d'authentification (`auth.rate_limit.email_sent`,
+2 par heure) : relancer le test plusieurs fois dans l'heure peut faire échouer le flux « mot de passe
+oublié » (`npx supabase db reset` remet le compteur à zéro). Avec `CI=1`, Metro ne surveille pas les
+fichiers : relancer `expo start` après une modification du code.
+
+### Ordre des tests sur la base locale
+
+Les tests pgTAP (`npx supabase test db`) supposent une base fraîchement réinitialisée : après un passage du
+test e2e (comptes, cours et notifications laissés en base), certains tests comptant les lignes d'outbox
+échouent. Lancer `npx supabase db reset` avant `npx supabase test db` (et avant chaque e2e si le compteur
+d'e-mails d'authentification est atteint).
+
+### Limites des notifications en local
+
+- Les notifications push réelles (Expo Push vers un appareil) ne sont testables que sur un téléphone, une
+  fois l'application construite (plan 5) : le test e2e vérifie uniquement les lignes écrites dans
+  `notification_outbox` (annulation, créneau vacant) et pas leur livraison. Sur le web, l'enregistrement
+  du jeton est ignoré.
+- Le cron `send-push` ne fait rien tant que les secrets Vault `functions_url` et `service_role_key` n'existent
+  pas (voir « Notifications et tâches planifiées »).
+- `npx tsc --noEmit` s'appuie sur les types de routes générés dans `.expo/types` (dossier ignoré par git) :
+  sur un clone neuf, ou si `tsc` se plaint de routes inconnues (`/courses/new`, `/admin/locations`…),
+  lancer une fois `npx expo start` (puis quitter) pour les régénérer.
+- Une route de `Tabs` masquée par `href: null` est redirigée vers `/` par expo-router : le dossier
+  `courses` (détail, création, modification) n'est donc pas masqué mais sans bouton d'onglet
+  (`tabBarItemStyle: { display: 'none' }`).
+
+## Classements et statistiques
+
+Source unique : une présence compte si `attendance.present` est vrai sur un cours **non annulé** et **déjà
+commencé** (`starts_at <= now()`). Les heures sont la durée du cours (`ends_at - starts_at`), arrondie à
+2 décimales en base et affichée avec 1 décimale. Toutes les bornes de période sont en heure de Zurich.
+
+- **Classement** (onglet « Classement », RPC `attendance_ranking` et `my_ranking`) : nombre de présences, sur
+  « Depuis toujours » ou « Cette année » (année civile en cours). Seuls les comptes actifs avec au moins une
+  présence apparaissent ; rang dense (5, 5, 2 donne 1, 1, 2), tri par présences décroissantes puis nom. Les
+  filtres Top 10 / Top 20 gardent tous les ex aequo de la dernière place. L'écran n'expose que prénom, nom,
+  ceinture et nombre de présences.
+- **Moins de 16 ans** : masqués du classement (inscrits seuls avec accord parental ou enfants sans login) ; ils
+  ne prennent pas de rang et les autres rangs sont calculés sans eux. Ils peuvent ouvrir l'onglet et voient leur
+  propre position (celle qu'ils auraient s'ils étaient inclus), sans figurer dans la liste.
+- **Tableau de bord admin** (`/admin/dashboard`) : heures d'enseignement par prof (cours avec un prof, un open mat
+  sans prof ne compte pour personne) et total ; présences et heures par membre ; périodes Ce mois, Cette année
+  ou dates personnalisées (bornes incluses) ; compteurs de profs et justificatifs en attente (celui des profs
+  ouvre la liste des comptes filtrée sur « profs en attente »). « Heures de présence » couvre tous les
+  membres venus (adhérents ou non, profs venus comme élèves). Supprimer le compte d'un prof retire ses heures
+  d'enseignement passées des statistiques (ses cours n'ont plus de prof).
+- **Segments** (liste des membres, filtres Jamais / Essai / Occasionnel / Régulier, RPC `admin_member_segments`) :
+  `jamais` = aucune présence ; `essai` = une seule présence au total ; `régulier` = 12 présences ou plus sur les
+  90 derniers jours ; sinon `occasionnel` (au moins 2 présences au total et moins de 12 sur les 90 derniers
+  jours, y compris sans venue récente). La liste affiche aussi le nombre de venues et la dernière venue.
+- Les RPC `admin_*` sont réservées à un admin au compte actif ; le classement à tout compte actif.
+
+## Notes pour les plans suivants
+
+- **Plan 3** : une réservation (`bookings`) d'un cours annulé reste active (`cancelled_at` null) ; les
+  écrans « mes réservations » et les compteurs doivent joindre `courses.status` et ignorer les cours
+  `annule`.
+- **Plan 4** : les classements ne doivent compter que la présence (`attendance`) des cours non annulés
+  (`cancel_course` supprime l'appel des cours qu'il annule, mais filtrer quand même sur `courses.status`).
+- **Plan 5** (application native), à vérifier :
+  - lire les reçus Expo (`getReceipts`) pour supprimer les jetons invalides signalés après l'envoi ;
+  - supprimer le jeton push de l'appareil à la déconnexion (`push_tokens`, policy `delete` propre) ;
+  - démarrage à froid depuis une notification : différer l'ouverture de la route jusqu'à ce que la
+    session et le profil soient chargés (`AuthGate`) ;
+  - onglet Admin (`href: null` pour un non-admin) : vérifier le comportement au rechargement de la page
+    web sur une route admin ;
+  - renseigner `extra.eas.projectId` (EAS) : sans lui, `registerForPush` renvoie `unsupported`.
+
+## Mot de passe oublié
+
+Le lien de l'e-mail ramène sur `/reset-password` : `<origine web>/reset-password` sur le web,
+`iconvalais://reset-password` sur mobile. Ces URL doivent être autorisées dans
+`auth.additional_redirect_urls` (`supabase/config.jsonc` pour la stack locale ; en production, ajouter
+l'URL web publique + `/reset-password` et `iconvalais://reset-password` dans le tableau de bord Supabase,
+Authentication > URL Configuration). Après modification de `config.jsonc` : `npx supabase stop && npx supabase start`.
+
+## Créer le premier administrateur
+
+Les administrateurs ne peuvent pas s'inscrire eux-mêmes : créer un compte normal, puis le promouvoir
+en SQL avec le rôle `postgres` (Studio > SQL editor, ou `psql postgresql://postgres:postgres@127.0.0.1:54322/postgres`) :
+
+```sql
+update profiles set role = 'admin' where email = 'admin@example.com';
+```
+
+Le dernier administrateur ne peut ni se retirer le rôle admin ni supprimer son compte : nommer d'abord
+un autre administrateur.
+
+Les professeurs inscrits restent « en attente de validation » jusqu'à ce qu'un administrateur les
+valide dans l'onglet Admin (filtre « Profs en attente »).
