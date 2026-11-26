@@ -25,7 +25,7 @@ jest.mock('@/src/lib/supabase', () => ({
     rpc: (...a: unknown[]) => mockRpc(...a),
     from: (table: string) => {
       const q: Record<string, unknown> = {};
-      for (const m of ['select', 'eq', 'in', 'is', 'gte', 'lt', 'order']) q[m] = () => q;
+      for (const m of ['select', 'eq', 'in', 'is', 'or', 'gte', 'lt', 'order']) q[m] = () => q;
       q.then = (res: (v: unknown) => unknown) => {
         if (table === 'courses' && mockCoursesQueue) {
           mockCoursesCalls++;

@@ -38,7 +38,13 @@ async function assemble(courses: RawCourse[], profileIds?: string[]): Promise<Co
   const courseIds = courses.map((c) => c.id);
   const profIds = [...new Set(courses.map((c) => c.prof_id).filter((x): x is string => !!x))];
 
-  let myQuery = supabase.from('bookings').select('course_id,profile_id').in('course_id', courseIds).is('cancelled_at', null);
+  // réservations actives : non annulées, et pas en attente de paiement expirée
+  let myQuery = supabase
+    .from('bookings')
+    .select('course_id,profile_id')
+    .in('course_id', courseIds)
+    .is('cancelled_at', null)
+    .or(`payment_status.neq.pending,pending_until.gt."${new Date().toISOString()}"`);
   if (profileIds) myQuery = myQuery.in('profile_id', profileIds);
 
   const [profs, counts, mine] = await Promise.all([
@@ -73,18 +79,49 @@ async function assemble(courses: RawCourse[], profileIds?: string[]): Promise<Co
   }));
 }
 
-/** Retourne null en cas de succès, sinon la clé i18n de l'erreur. */
-async function call(fn: 'book_course' | 'unbook_course', courseId: string, profileId?: string): Promise<string | null> {
+export type BookResult = {
+  /** null en cas de succès, sinon la clé i18n de l'erreur. */
+  error: string | null;
+  bookingId: string | null;
+  /** Montant en CHF (0 : cours d'essai, adhérent à 0, ...). */
+  amount: number;
+  /** Réservation en attente de paiement (15 min). */
+  needsPayment: boolean;
+};
+
+/** Réserve pour soi (profileId absent) ou son enfant ; le prix est calculé par le serveur. */
+export async function bookCourse(courseId: string, profileId?: string): Promise<BookResult> {
+  const failed = (error: string): BookResult => ({ error, bookingId: null, amount: 0, needsPayment: false });
   try {
-    const { error } = await supabase.rpc(fn, { p_course: courseId, ...(profileId ? { p_profile: profileId } : {}) });
+    const { data, error } = await supabase.rpc('book_course', {
+      p_course: courseId,
+      ...(profileId ? { p_profile: profileId } : {}),
+    });
+    if (error) return failed(courseRpcErrorKey(error));
+    const row = Array.isArray(data) ? data[0] : null;
+    return {
+      error: null,
+      bookingId: row?.booking_id ?? null,
+      amount: Number(row?.amount ?? 0),
+      needsPayment: row?.needs_payment ?? false,
+    };
+  } catch {
+    return failed('errors.network');
+  }
+}
+
+/** Retourne null en cas de succès, sinon la clé i18n de l'erreur. */
+export async function unbookCourse(courseId: string, profileId?: string): Promise<string | null> {
+  try {
+    const { error } = await supabase.rpc('unbook_course', {
+      p_course: courseId,
+      ...(profileId ? { p_profile: profileId } : {}),
+    });
     return error ? courseRpcErrorKey(error) : null;
   } catch {
     return 'errors.network';
   }
 }
-
-export const bookCourse = (courseId: string, profileId?: string) => call('book_course', courseId, profileId);
-export const unbookCourse = (courseId: string, profileId?: string) => call('unbook_course', courseId, profileId);
 
 async function rpcKey(run: () => PromiseLike<{ error: { code?: string; hint?: string | null } | null }>): Promise<string | null> {
   try {

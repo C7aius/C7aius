@@ -20,7 +20,7 @@ jest.mock('@/src/lib/supabase', () => ({
     rpc: (...a: unknown[]) => mockRpc(...a),
     from: (table: string) => {
       const q: Record<string, unknown> = {};
-      for (const m of ['select', 'eq', 'in', 'is', 'order', 'limit']) q[m] = () => q;
+      for (const m of ['select', 'eq', 'in', 'is', 'or', 'order', 'limit']) q[m] = () => q;
       q.then = (res: (v: unknown) => unknown) =>
         Promise.resolve({ data: mockTables[table] ?? [], error: null }).then(res);
       return q;

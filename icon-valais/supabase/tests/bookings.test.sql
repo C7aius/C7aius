@@ -122,11 +122,11 @@ select pg_temp.book(pg_temp.k('started'), pg_temp.k('ch'), pg_temp.k('pa'));
 -- book_course
 -- ---------------------------------------------------------------------------
 select pg_temp.login('51000000-0000-0000-0000-000000000051');
-insert into got values ('b1', public.book_course(pg_temp.k('c1')));
+insert into got values ('b1', (select booking_id from public.book_course(pg_temp.k('c1'))));
 select isnt((select v from got where k = 'b1'), null, 'book_course renvoie l''id de la réservation');
-select is(public.book_course(pg_temp.k('c1')), (select v from got where k = 'b1'),
+select is((select booking_id from public.book_course(pg_temp.k('c1'))), (select v from got where k = 'b1'),
           'réserver deux fois → même réservation');
-select is(public.book_course(pg_temp.k('c1'), pg_temp.k('s1')), (select v from got where k = 'b1'),
+select is((select booking_id from public.book_course(pg_temp.k('c1'), pg_temp.k('s1'))), (select v from got where k = 'b1'),
           'p_profile = soi → même réservation');
 reset role;
 select is(pg_temp.active(pg_temp.k('c1'), pg_temp.k('s1')), 1, 'une seule réservation active');
@@ -151,9 +151,9 @@ reset role;
 
 -- parent
 select pg_temp.login('9a000000-0000-0000-0000-00000000009a');
-insert into got values ('bch', public.book_course(pg_temp.k('c1'), pg_temp.k('ch')));
+insert into got values ('bch', (select booking_id from public.book_course(pg_temp.k('c1'), pg_temp.k('ch'))));
 select isnt((select v from got where k = 'bch'), null, 'un parent réserve pour son enfant');
-select is(public.book_course(pg_temp.k('c1'), pg_temp.k('ch')), (select v from got where k = 'bch'),
+select is((select booking_id from public.book_course(pg_temp.k('c1'), pg_temp.k('ch'))), (select v from got where k = 'bch'),
           'parent : deux fois → même réservation');
 select throws_ok(format('select public.book_course(%L, %L)', pg_temp.k('c1'), pg_temp.k('chb')),
                  '42501', null, 'parent : enfant d''un autre parent → 42501');
@@ -189,9 +189,9 @@ select isnt((select cancelled_at from public.bookings where id = (select v from 
             null, 'cancelled_at renseigné');
 select pg_temp.login('51000000-0000-0000-0000-000000000051');
 select lives_ok(format('select public.unbook_course(%L)', pg_temp.k('c1')), 'se désinscrire sans réservation active : sans effet');
-insert into got values ('b1bis', public.book_course(pg_temp.k('c1')));
+insert into got values ('b1bis', (select booking_id from public.book_course(pg_temp.k('c1'))));
 select isnt((select v from got where k = 'b1bis'), (select v from got where k = 'b1'), 'réinscription : nouvelle réservation');
-select is(public.book_course(pg_temp.k('c1')), (select v from got where k = 'b1bis'), 'réinscription : deux fois → même réservation');
+select is((select booking_id from public.book_course(pg_temp.k('c1'))), (select v from got where k = 'b1bis'), 'réinscription : deux fois → même réservation');
 reset role;
 select is(pg_temp.active(pg_temp.k('c1'), pg_temp.k('s1')), 1, 'réinscription : une seule réservation active');
 select is((select count(*)::int from public.bookings where course_id = pg_temp.k('c1') and profile_id = pg_temp.k('s1')),
@@ -210,7 +210,7 @@ select is(pg_temp.active(pg_temp.k('c1'), pg_temp.k('ch')), 1, 'l''enfant reste 
 
 select pg_temp.login('9a000000-0000-0000-0000-00000000009a');
 select lives_ok(format('select public.unbook_course(%L, %L)', pg_temp.k('c1'), pg_temp.k('ch')), 'le parent désinscrit son enfant');
-select isnt(public.book_course(pg_temp.k('c1'), pg_temp.k('ch')), (select v from got where k = 'bch'),
+select isnt((select booking_id from public.book_course(pg_temp.k('c1'), pg_temp.k('ch'))), (select v from got where k = 'bch'),
             'le parent réinscrit son enfant');
 reset role;
 select is(pg_temp.active(pg_temp.k('c1'), pg_temp.k('ch')), 1, 'enfant : une seule réservation active');

@@ -94,7 +94,11 @@ export type Database = {
           cancelled_at: string | null;
           course_id: string;
           created_at: string;
+          free_trial: boolean;
           id: string;
+          payment_status: string;
+          pending_until: string | null;
+          price: number;
           profile_id: string;
         };
         ComputedFields: never;
@@ -103,7 +107,11 @@ export type Database = {
           cancelled_at?: string | null;
           course_id: string;
           created_at?: string;
+          free_trial?: boolean;
           id?: string;
+          payment_status?: string;
+          pending_until?: string | null;
+          price?: number;
           profile_id: string;
         };
         Update: {
@@ -111,7 +119,11 @@ export type Database = {
           cancelled_at?: string | null;
           course_id?: string;
           created_at?: string;
+          free_trial?: boolean;
           id?: string;
+          payment_status?: string;
+          pending_until?: string | null;
+          price?: number;
           profile_id?: string;
         };
         Relationships: [
@@ -515,6 +527,110 @@ export type Database = {
           },
         ];
       };
+      payments: {
+        Row: {
+          amount: number;
+          beneficiary_profile_id: string | null;
+          booking_id: string | null;
+          created_at: string;
+          currency: string;
+          description: string;
+          id: string;
+          kind: Database["public"]["Enums"]["payment_kind"];
+          membership_id: string | null;
+          method: string | null;
+          paid_at: string | null;
+          payer_profile_id: string | null;
+          receipt_no: number;
+          refunded_at: string | null;
+          status: Database["public"]["Enums"]["payment_state"];
+          stripe_invoice_id: string | null;
+          stripe_payment_intent_id: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          amount: number;
+          beneficiary_profile_id?: string | null;
+          booking_id?: string | null;
+          created_at?: string;
+          currency?: string;
+          description: string;
+          id?: string;
+          kind: Database["public"]["Enums"]["payment_kind"];
+          membership_id?: string | null;
+          method?: string | null;
+          paid_at?: string | null;
+          payer_profile_id?: string | null;
+          receipt_no?: never;
+          refunded_at?: string | null;
+          status?: Database["public"]["Enums"]["payment_state"];
+          stripe_invoice_id?: string | null;
+          stripe_payment_intent_id?: string | null;
+        };
+        Update: {
+          amount?: number;
+          beneficiary_profile_id?: string | null;
+          booking_id?: string | null;
+          created_at?: string;
+          currency?: string;
+          description?: string;
+          id?: string;
+          kind?: Database["public"]["Enums"]["payment_kind"];
+          membership_id?: string | null;
+          method?: string | null;
+          paid_at?: string | null;
+          payer_profile_id?: string | null;
+          receipt_no?: never;
+          refunded_at?: string | null;
+          status?: Database["public"]["Enums"]["payment_state"];
+          stripe_invoice_id?: string | null;
+          stripe_payment_intent_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "payments_beneficiary_profile_id_fkey";
+            columns: ["beneficiary_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payments_beneficiary_profile_id_fkey";
+            columns: ["beneficiary_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "public_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payments_booking_id_fkey";
+            columns: ["booking_id"];
+            isOneToOne: false;
+            referencedRelation: "bookings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payments_membership_id_fkey";
+            columns: ["membership_id"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payments_payer_profile_id_fkey";
+            columns: ["payer_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payments_payer_profile_id_fkey";
+            columns: ["payer_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "public_profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       pricing_settings: {
         Row: {
           child_discount_pct: number;
@@ -756,7 +872,15 @@ export type Database = {
       admin_update_pricing: { Args: { p: Json }; Returns: undefined };
       admin_upsert_location: { Args: { p: Json }; Returns: string };
       assign_prof: { Args: { p_course: string; p_prof: string }; Returns: undefined };
-      book_course: { Args: { p_course: string; p_profile?: string }; Returns: string };
+      attach_payment_intent: { Args: { p_intent: string; p_payment: string }; Returns: undefined };
+      book_course: {
+        Args: { p_course: string; p_profile?: string };
+        Returns: {
+          amount: number;
+          booking_id: string;
+          needs_payment: boolean;
+        }[];
+      };
       can_pay_for: { Args: { p_profile: string }; Returns: boolean };
       cancel_course: { Args: { p_course: string; p_scope: string }; Returns: number };
       check_parent_consent: { Args: { p_token: string }; Returns: boolean };
@@ -776,6 +900,7 @@ export type Database = {
         }[];
       };
       confirm_parent_consent: { Args: { p_token: string }; Returns: boolean };
+      confirm_payment: { Args: { p_intent: string; p_method: string }; Returns: string };
       course_participants: {
         Args: { p_course: string };
         Returns: {
@@ -791,6 +916,7 @@ export type Database = {
       create_course: { Args: { p: Json; p_repeat_until?: string }; Returns: string[] };
       current_account_active: { Args: Record<PropertyKey, never>; Returns: boolean };
       current_profile_id: { Args: Record<PropertyKey, never>; Returns: string };
+      fail_payment: { Args: { p_intent: string }; Returns: undefined };
       invoke_send_push: { Args: Record<PropertyKey, never>; Returns: number };
       is_account_active: {
         Args: {
@@ -807,6 +933,7 @@ export type Database = {
       is_member: { Args: { p_on?: string; p_profile: string }; Returns: boolean };
       is_self_or_child: { Args: { p_profile: string }; Returns: boolean };
       leave_slot: { Args: { p_course: string }; Returns: undefined };
+      mark_refunded: { Args: { p_payment: string }; Returns: undefined };
       membership_price: {
         Args: { p_months: number; p_profile: string };
         Returns: {
@@ -826,13 +953,57 @@ export type Database = {
           until: string;
         }[];
       };
+      my_trial_status: {
+        Args: { p_profile?: string };
+        Returns: {
+          trial_limit: number;
+          used: number;
+        }[];
+      };
       notify_profile: { Args: { p_course: string; p_kind: string; p_profile: string }; Returns: undefined };
       process_course_schedule: { Args: Record<PropertyKey, never>; Returns: undefined };
+      refunds_to_process: {
+        Args: { p_limit: number };
+        Returns: {
+          amount: number;
+          beneficiary_profile_id: string | null;
+          booking_id: string | null;
+          created_at: string;
+          currency: string;
+          description: string;
+          id: string;
+          kind: Database["public"]["Enums"]["payment_kind"];
+          membership_id: string | null;
+          method: string | null;
+          paid_at: string | null;
+          payer_profile_id: string | null;
+          receipt_no: number;
+          refunded_at: string | null;
+          status: Database["public"]["Enums"]["payment_state"];
+          stripe_invoice_id: string | null;
+          stripe_payment_intent_id: string | null;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "payments";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
       register_push_token: { Args: { p_platform: string; p_token: string }; Returns: undefined };
       release_future_courses: { Args: { p_profile: string }; Returns: undefined };
       set_attendance: { Args: { p_course: string; p_present: boolean; p_profile: string }; Returns: undefined };
       set_belt: { Args: { p_belt: Database["public"]["Enums"]["belt"]; p_profile: string }; Returns: undefined };
+      start_course_payment: {
+        Args: { p_booking: string; p_payer: string };
+        Returns: {
+          amount: number;
+          description: string;
+          payment_id: string;
+        }[];
+      };
       take_slot: { Args: { p_course: string }; Returns: undefined };
+      trial_used: { Args: { p_profile: string }; Returns: number };
       unbook_course: { Args: { p_course: string; p_profile?: string }; Returns: undefined };
       update_course: { Args: { p: Json; p_course: string; p_scope: string }; Returns: number };
     };
@@ -844,6 +1015,8 @@ export type Database = {
       lang: "fr" | "de" | "en" | "ru";
       membership_source: "stripe_subscription" | "one_time" | "admin_year";
       membership_status: "pending" | "active" | "cancelled" | "ended";
+      payment_kind: "course" | "membership";
+      payment_state: "pending" | "succeeded" | "failed" | "refund_pending" | "refunded";
       prof_status: "en_attente" | "valide" | "refuse";
       sport: "jjb" | "grappling" | "mma";
       student_status: "aucun" | "en_attente" | "valide" | "refuse";
@@ -967,6 +1140,8 @@ export const Constants = {
       lang: ["fr", "de", "en", "ru"],
       membership_source: ["stripe_subscription", "one_time", "admin_year"],
       membership_status: ["pending", "active", "cancelled", "ended"],
+      payment_kind: ["course", "membership"],
+      payment_state: ["pending", "succeeded", "failed", "refund_pending", "refunded"],
       prof_status: ["en_attente", "valide", "refuse"],
       sport: ["jjb", "grappling", "mma"],
       student_status: ["aucun", "en_attente", "valide", "refuse"],

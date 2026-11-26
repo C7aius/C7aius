@@ -31,7 +31,8 @@ export function BookButton({
     onError(null);
     // pas de p_profile pour soi-même
     const arg = target === selfId ? undefined : target;
-    const key = await (booked ? unbookCourse(course.id, arg) : bookCourse(course.id, arg));
+    // le paiement d'une réservation payante (needsPayment) arrive avec la tâche 6
+    const key = booked ? await unbookCourse(course.id, arg) : (await bookCourse(course.id, arg)).error;
     setBusy(false);
     if (key) onError(key);
     else onDone();
