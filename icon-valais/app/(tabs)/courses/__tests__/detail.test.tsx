@@ -100,13 +100,17 @@ it('admin can edit a private course', async () => {
 
 it('prof takes a vacant slot; slot_taken shows message and reloads', async () => {
   mockAuth = { profile: { id: 'pr2', role: 'prof' }, isActive: true };
-  mockRpc.mockResolvedValueOnce({ data: null, error: { code: '22023', hint: 'slot_taken' } });
+  mockRpc.mockImplementation((fn: string) => // seul take_slot échoue (my_* se chargent aussi par rpc)
+    Promise.resolve(fn === 'take_slot' ? { data: null, error: { code: '22023', hint: 'slot_taken' } } : { data: null, error: null }),
+  );
   await render(<CourseDetail />);
   fireEvent.press(await screen.findByText('Prendre ce cours'));
   expect(await screen.findByText('Ce créneau est déjà pris.')).toBeTruthy();
   expect(mockRpc).toHaveBeenCalledWith('take_slot', { p_course: 'c1' });
   mockTables.courses = [course({ prof_id: 'pr1' })];
-  mockRpc.mockResolvedValueOnce({ data: null, error: { code: '22023', hint: 'slot_taken' } });
+  mockRpc.mockImplementation((fn: string) => // seul take_slot échoue (my_* se chargent aussi par rpc)
+    Promise.resolve(fn === 'take_slot' ? { data: null, error: { code: '22023', hint: 'slot_taken' } } : { data: null, error: null }),
+  );
   fireEvent.press(screen.getByText('Prendre ce cours'));
   await waitFor(() => expect(screen.queryByText('Prendre ce cours')).toBeNull());
   await settle();
@@ -193,4 +197,28 @@ describe('attendance', () => {
     expect(screen.getByLabelText('Ceinture : Anna Eleve')).toBeTruthy();
     expect(screen.queryByLabelText('Ceinture : Marc Prof')).toBeNull();
   });
+});
+
+it('shows the trial counter and the pay action of a pending booking (like the planning)', async () => {
+  mockRpc.mockImplementation((fn: string) =>
+    Promise.resolve({
+      data:
+        fn === 'my_trial_status' ? [{ used: 4, trial_limit: 10 }]
+        : fn === 'my_membership' ? [{ is_member: false }]
+        : fn === 'course_participants' ? participants : null,
+      error: null,
+    }),
+  );
+  await render(<CourseDetail />);
+  expect(await screen.findByText("Cours d'essai — 4/10 utilisés")).toBeTruthy();
+  await settle();
+});
+
+it('a pending booking offers Payer on the detail screen', async () => {
+  mockTables.bookings = [
+    { id: 'bp1', course_id: 'c1', profile_id: 'me', payment_status: 'pending', pending_until: new Date(Date.now() + 600000).toISOString() },
+  ];
+  await render(<CourseDetail />);
+  expect(await screen.findByText('Payer')).toBeTruthy();
+  await settle();
 });

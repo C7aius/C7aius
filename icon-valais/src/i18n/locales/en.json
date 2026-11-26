@@ -345,8 +345,9 @@
     "resultTitleSuccess": "Payment received",
     "resultSuccess": "Thank you! Your payment is awaiting confirmation.",
     "resultTitleCancel": "Payment cancelled",
-    "resultCancel": "Nothing was charged. Your spot is released after 15 minutes.",
+    "resultCancel": "Nothing was charged. Your spot stays held for 15 minutes: you can pay from the schedule.",
     "resultInvalid": "Unknown payment return.",
-    "backHome": "Back to classes"
+    "backHome": "Back to classes",
+    "pendingUntil": "Payment pending — spot held until {{time}}"
   }
 }

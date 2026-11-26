@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { MERCHANT_IDENTIFIER } from '@/src/lib/stripeConfig';
 import { loadStripe } from '@/src/lib/stripeModule';
 
 const PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY;
@@ -12,7 +13,7 @@ export function PaymentsProvider({ children }: { children: ReactElement }) {
   if (!PUBLISHABLE_KEY) return children;
   const { StripeProvider } = loadStripe();
   return (
-    <StripeProvider publishableKey={PUBLISHABLE_KEY} urlScheme="iconvalais" merchantIdentifier="merchant.ch.iconvalais.placeholder">
+    <StripeProvider publishableKey={PUBLISHABLE_KEY} urlScheme="iconvalais" merchantIdentifier={MERCHANT_IDENTIFIER}>
       {children}
     </StripeProvider>
   );

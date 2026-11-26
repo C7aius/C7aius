@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 
 import { supabase } from '@/src/lib/supabase';
 // stripeModule.native.ts (natif) / stripeModule.ts (web, jamais appelé) : le SDK natif n'entre pas dans le bundle web
+import { MERCHANT_IDENTIFIER } from '@/src/lib/stripeConfig';
 import { loadStripe } from '@/src/lib/stripeModule';
 
 /**
@@ -12,7 +13,6 @@ import { loadStripe } from '@/src/lib/stripeModule';
 export type PayOutcome = 'paid' | 'cancelled' | 'error' | 'pending' | 'redirected';
 export type PayDetail = { outcome: PayOutcome; errorKey?: string };
 
-const MERCHANT_IDENTIFIER = 'merchant.ch.iconvalais.placeholder'; // à remplacer au plan 5 (Apple Pay)
 const RETURN_URL = 'iconvalais://stripe-redirect';
 const POLL_INTERVAL_MS = 1000;
 const POLL_ATTEMPTS = 10;

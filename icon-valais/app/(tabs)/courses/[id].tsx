@@ -5,12 +5,13 @@ import { useTranslation } from 'react-i18next';
 
 import { useAuth, type Profile } from '@/src/auth/AuthProvider';
 import { AssignProfPicker } from '@/src/components/courses/AssignProfPicker';
-import { BookButton } from '@/src/components/courses/BookButton';
+import { BookButton, type PayInfo } from '@/src/components/courses/BookButton';
 import { LocationDetails } from '@/src/components/courses/LocationDetails';
 import { ParticipantsList } from '@/src/components/courses/ParticipantsList';
 import { Button, Chip, ErrorText } from '@/src/components/ui';
 import { courseLabelStatus, formatChf, formatCourseTime, type CourseRow } from '@/src/domain/courses';
 import type { Lang } from '@/src/i18n';
+import { loadPayInfo } from '@/src/lib/payInfo';
 import { cancelCourse, fetchCourse, leaveSlot, takeSlot } from '@/src/lib/coursesApi';
 import { supabase } from '@/src/lib/supabase';
 import { colors } from '@/src/theme';
@@ -23,6 +24,7 @@ export default function CourseDetail() {
   const lang = (i18n.language || 'fr') as Lang;
   const [course, setCourse] = useState<CourseRow | null>(null);
   const [kids, setKids] = useState<Pick<Profile, 'id' | 'first_name'>[]>([]);
+  const [payInfo, setPayInfo] = useState<Record<string, PayInfo>>({});
   const [state, setState] = useState<'loading' | 'ok' | 'missing' | 'error'>('loading');
   const [now, setNow] = useState(() => new Date());
   const [errorKey, setErrorKey] = useState<string | null>(null);
@@ -42,6 +44,9 @@ export default function CourseDetail() {
       const c = await fetchCourse(id, [selfId, ...kidList.map((k) => k.id)]);
       if (mine !== requestId.current) return;
       setKids(kidList);
+      void loadPayInfo([selfId, ...kidList.map((k) => k.id)]).then((info) => {
+        if (mine === requestId.current) setPayInfo(info);
+      });
       setCourse(c);
       setNow(new Date());
       setState(c ? 'ok' : 'missing');
@@ -121,7 +126,7 @@ export default function CourseDetail() {
       <Text style={styles.meta}>{t('courses.priceNonMember', { price: formatChf(course.price_non_member) })}</Text>
 
       {open ? (
-        <BookButton course={course} selfId={selfId} kids={kids} onError={setErrorKey} onDone={() => void load()} />
+        <BookButton course={course} selfId={selfId} kids={kids} payInfo={payInfo} onError={setErrorKey} onDone={() => void load()} />
       ) : null}
       {canTake ? <Button title={t('courses.take')} disabled={busy} onPress={() => void act(() => takeSlot(course.id))} /> : null}
       {canLeave ? (

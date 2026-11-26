@@ -2,7 +2,7 @@ import { courseRpcErrorKey } from '@/src/domain/adminErrors';
 import type { CourseRow } from '@/src/domain/courses';
 import { supabase } from '@/src/lib/supabase';
 
-type RawCourse = Omit<CourseRow, 'prof' | 'booked' | 'myBookings'>;
+type RawCourse = Omit<CourseRow, 'prof' | 'booked' | 'myBookings' | 'myPending'>;
 
 /**
  * Cours de la semaine [from, to[ : au plus 4 requêtes, quel que soit le nombre de cours
@@ -41,7 +41,7 @@ async function assemble(courses: RawCourse[], profileIds?: string[]): Promise<Co
   // réservations actives : non annulées, et pas en attente de paiement expirée
   let myQuery = supabase
     .from('bookings')
-    .select('course_id,profile_id')
+    .select('id,course_id,profile_id,payment_status,pending_until')
     .in('course_id', courseIds)
     .is('cancelled_at', null)
     .or(`payment_status.neq.pending,pending_until.gt."${new Date().toISOString()}"`);
@@ -67,8 +67,13 @@ async function assemble(courses: RawCourse[], profileIds?: string[]): Promise<Co
     countById.set(c.course_id, c.booked ?? 0);
   }
   const mineById = new Map<string, string[]>();
-  for (const b of (mine.data ?? []) as { course_id: string; profile_id: string }[]) {
+  const pendingById = new Map<string, CourseRow['myPending']>();
+  type MineRow = { id: string; course_id: string; profile_id: string; payment_status: string; pending_until: string | null };
+  for (const b of (mine.data ?? []) as MineRow[]) {
     mineById.set(b.course_id, [...(mineById.get(b.course_id) ?? []), b.profile_id]);
+    if (b.payment_status === 'pending' && b.pending_until) {
+      pendingById.set(b.course_id, { ...(pendingById.get(b.course_id) ?? {}), [b.profile_id]: { bookingId: b.id, until: b.pending_until } });
+    }
   }
 
   return courses.map((c) => ({
@@ -76,6 +81,7 @@ async function assemble(courses: RawCourse[], profileIds?: string[]): Promise<Co
     prof: c.prof_id ? (profById.get(c.prof_id) ?? null) : null,
     booked: countById.get(c.id) ?? 0,
     myBookings: mineById.get(c.id) ?? [],
+    myPending: pendingById.get(c.id) ?? {},
   }));
 }
 

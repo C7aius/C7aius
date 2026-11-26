@@ -345,8 +345,9 @@
     "resultTitleSuccess": "Paiement reçu",
     "resultSuccess": "Merci ! Votre paiement est en cours de confirmation.",
     "resultTitleCancel": "Paiement annulé",
-    "resultCancel": "Aucun montant n'a été débité. Votre place est libérée après 15 minutes.",
+    "resultCancel": "Aucun montant n'a été débité. Votre place reste retenue 15 minutes : vous pouvez payer depuis le planning.",
     "resultInvalid": "Retour de paiement inconnu.",
-    "backHome": "Retour aux cours"
+    "backHome": "Retour aux cours",
+    "pendingUntil": "Paiement en attente — place retenue jusqu'à {{time}}"
   }
 }

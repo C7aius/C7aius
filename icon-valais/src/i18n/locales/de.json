@@ -345,8 +345,9 @@
     "resultTitleSuccess": "Zahlung erhalten",
     "resultSuccess": "Danke! Ihre Zahlung wird bestätigt.",
     "resultTitleCancel": "Zahlung abgebrochen",
-    "resultCancel": "Es wurde nichts abgebucht. Ihr Platz wird nach 15 Minuten freigegeben.",
+    "resultCancel": "Es wurde nichts abgebucht. Ihr Platz bleibt 15 Minuten reserviert: Sie können im Kursplan bezahlen.",
     "resultInvalid": "Unbekannte Zahlungsrückkehr.",
-    "backHome": "Zurück zu den Kursen"
+    "backHome": "Zurück zu den Kursen",
+    "pendingUntil": "Zahlung ausstehend — Platz reserviert bis {{time}}"
   }
 }

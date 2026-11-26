@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import type { Profile } from '@/src/auth/AuthProvider';
 import { PaySheet } from '@/src/components/payments/PaySheet';
 import { Button, Chip } from '@/src/components/ui';
+import { payBookingDetail } from '@/src/lib/payments';
+import { zurichTimeKey } from '@/src/domain/courses';
 import { colors } from '@/src/theme';
 import type { CourseRow } from '@/src/domain/courses';
 import { bookCourse, unbookCourse } from '@/src/lib/coursesApi';
@@ -64,6 +66,18 @@ export function BookButton({
     onDone();
   };
 
+  const pending = booked ? course.myPending?.[target] : undefined;
+  const payPending = async () => {
+    if (!pending) return;
+    setBusy(true);
+    onError(null);
+    const { outcome, errorKey } = await payBookingDetail(pending.bookingId);
+    setBusy(false);
+    if (outcome === 'error') return onError(errorKey ?? 'payments.error');
+    if (outcome === 'redirected') return;
+    closePay(outcome);
+  };
+
   const info = payInfo?.[target];
   const showTrial = !!info && !info.isMember && info.used < info.limit;
 
@@ -79,6 +93,10 @@ export function BookButton({
       ) : null}
       {showTrial ? <Text style={styles.trial}>{t('payments.trial', { used: info.used, limit: info.limit })}</Text> : null}
       {notice ? <Text style={styles.trial}>{t(notice)}</Text> : null}
+      {pending ? (
+        <Text style={styles.trial}>{t('payments.pendingUntil', { time: zurichTimeKey(pending.until) })}</Text>
+      ) : null}
+      {pending ? <Button title={t('payments.pay')} disabled={busy} onPress={() => void payPending()} /> : null}
       <Button
         title={booked ? t('courses.unbook') : t('courses.book')}
         variant={booked ? 'secondary' : 'primary'}

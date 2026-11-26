@@ -278,4 +278,30 @@ describe('payment', () => {
     expect(screen.queryByText('Payer')).toBeNull();
     expect(mockInvoke).not.toHaveBeenCalled();
   });
+
+  it('a pending booking shows the hold line and a Payer button that pays that booking', async () => {
+    rpcWith({ used: 10, trial_limit: 10 }, false, []);
+    const until = new Date(Date.now() + 10 * 60 * 1000);
+    mockTables.bookings = [
+      { id: 'bp1', course_id: 'c1', profile_id: 'me', payment_status: 'pending', pending_until: until.toISOString() },
+    ];
+    await render(<Courses />);
+    const hhmm = new Intl.DateTimeFormat('fr-CH', { timeZone: 'Europe/Zurich', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(until);
+    expect(await screen.findByText(`Paiement en attente — place retenue jusqu'à ${hhmm}`)).toBeTruthy();
+    expect(screen.getByText('Se désinscrire')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Payer'));
+    await waitFor(() =>
+      expect(mockInvoke).toHaveBeenCalledWith('create-payment', {
+        body: { kind: 'course', bookingId: 'bp1', platform: 'native' },
+      }),
+    );
+  });
+
+  it('a paid booking shows no Payer button', async () => {
+    rpcWith({ used: 10, trial_limit: 10 }, false, []);
+    mockTables.bookings = [{ id: 'bp1', course_id: 'c1', profile_id: 'me', payment_status: 'paid', pending_until: null }];
+    await render(<Courses />);
+    await screen.findByText('Se désinscrire');
+    expect(screen.queryByText('Payer')).toBeNull();
+  });
 });
