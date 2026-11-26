@@ -34,6 +34,20 @@ export default function ChildProfile() {
       <Text style={styles.title}>{child ? `${child.first_name} ${child.last_name}` : t('profile.childTitle')}</Text>
       {missing ? <Text style={styles.body}>{t('profile.notFound')}</Text> : null}
       {child ? <ProfileForm profile={child} onSaved={() => undefined} /> : null}
+      {child ? (
+        <>
+          <Button
+            title={t('subscription.link')}
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/profile/membership', params: { profileId: child.id } })}
+          />
+          <Button
+            title={t('studentProof.link')}
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/profile/student-proof', params: { profileId: child.id } })}
+          />
+        </>
+      ) : null}
       <Button title={t('common.back')} variant="secondary" onPress={() => router.back()} />
     </ScrollView>
   );

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { Button, ErrorText } from '@/src/components/ui';
 import { deleteAccountErrorKey } from '@/src/domain/functionErrors';
+import { formatDate } from '@/src/domain/adminErrors';
 import { displayRole } from '@/src/domain/roles';
 import { supabase } from '@/src/lib/supabase';
 import { colors } from '@/src/theme';
@@ -17,6 +18,25 @@ export default function ProfileHome() {
   const [step, setStep] = useState<0 | 1 | 2>(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const profileId = profile?.id;
+  const [memberUntil, setMemberUntil] = useState<string | null>(null);
+  useEffect(() => {
+    if (!profileId) return;
+    let live = true;
+    void (async () => {
+      try {
+        const { data } = await supabase.rpc('my_membership', { p_profile: profileId });
+        const row = Array.isArray(data) ? (data[0] as { is_member?: boolean; until?: string | null } | undefined) : undefined;
+        if (live) setMemberUntil(row?.is_member && row.until ? row.until : null);
+      } catch {
+        // statut indisponible : on n'affiche simplement pas la ligne
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [profileId]);
 
   if (!profile) return null;
 
@@ -47,7 +67,11 @@ export default function ProfileHome() {
       {profile.phone ? <Text style={styles.row}>{t('profile.phone')} : {profile.phone}</Text> : null}
       <Text style={styles.row}>{t('profile.sport')} : {profile.sports.map((s) => t(`sports.${s}`)).join(', ')}</Text>
 
+      {memberUntil ? <Text style={styles.row}>{t('subscription.memberUntil', { date: formatDate(memberUntil) })}</Text> : null}
+
       <Button title={t('profile.edit')} onPress={() => router.push('/profile/edit')} />
+      <Button title={t('subscription.link')} variant="secondary" onPress={() => router.push('/profile/membership')} />
+      <Button title={t('studentProof.link')} variant="secondary" onPress={() => router.push('/profile/student-proof')} />
       {profile.age >= 18 ? <Button title={t('profile.children')} variant="secondary" onPress={() => router.push('/profile/children')} /> : null}
       <Button title={t('auth.logout')} variant="secondary" onPress={() => void signOut()} />
 

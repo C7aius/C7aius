@@ -28,6 +28,13 @@
       "expo-router",
       "expo-notifications",
       [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Icon Valais utilise la caméra pour photographier votre justificatif étudiant."
+        }
+      ],
+      "expo-document-picker",
+      [
         "@stripe/stripe-react-native",
         {
           "merchantIdentifier": "merchant.ch.iconvalais.placeholder",
